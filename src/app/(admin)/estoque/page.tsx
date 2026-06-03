@@ -1,0 +1,122 @@
+import { createClient } from '@/lib/supabase/server'
+import { formatCurrency } from '@/lib/utils'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Package, TrendingDown } from 'lucide-react'
+
+export default async function EstoquePage() {
+  const supabase = await createClient()
+  const today = new Date().toISOString().split('T')[0]
+
+  const { data: orders } = await supabase
+    .from('orders')
+    .select('order_items(quantity, menu_item_id, menu_item:menu_items(name, price, cost_items(*)))')
+    .gte('created_at', today)
+    .neq('status', 'cancelled')
+
+  // Aggregate cost per menu item
+  const costMap = new Map<string, { name: string; qty: number; revenue: number; cost: number }>()
+
+  for (const order of orders ?? []) {
+    for (const item of ((order.order_items ?? []) as unknown as {
+      quantity: number
+      menu_item_id: string
+      menu_item: { name: string; price: number; cost_items: { unit_cost: number }[] }
+    }[])) {
+      const mi = item.menu_item
+      if (!mi) continue
+      const itemCost = (mi.cost_items ?? []).reduce((s: number, c: { unit_cost: number }) => s + c.unit_cost, 0)
+      const existing = costMap.get(item.menu_item_id)
+      if (existing) {
+        existing.qty += item.quantity
+        existing.revenue += mi.price * item.quantity
+        existing.cost += itemCost * item.quantity
+      } else {
+        costMap.set(item.menu_item_id, {
+          name: mi.name,
+          qty: item.quantity,
+          revenue: mi.price * item.quantity,
+          cost: itemCost * item.quantity,
+        })
+      }
+    }
+  }
+
+  const rows = Array.from(costMap.values()).sort((a, b) => b.qty - a.qty)
+  const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0)
+  const totalCost = rows.reduce((s, r) => s + r.cost, 0)
+  const totalProfit = totalRevenue - totalCost
+
+  return (
+    <div className="p-4 md:p-6 mt-14 md:mt-0">
+      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+        <Package size={24} className="text-orange-500" />
+        Estoque & Custo do dia
+      </h1>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card className="shadow-sm">
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm text-gray-500">Receita hoje</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm text-gray-500">Custo total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-red-500">{formatCurrency(totalCost)}</p>
+          </CardContent>
+        </Card>
+        <Card className="shadow-sm">
+          <CardHeader className="pb-1">
+            <CardTitle className="text-sm text-gray-500">Lucro estimado</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {formatCurrency(totalProfit)}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="text-gray-400 text-center py-16">Sem vendas registradas hoje</p>
+      ) : (
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b">
+                <th className="text-left p-3 font-medium text-gray-600">Produto</th>
+                <th className="text-right p-3 font-medium text-gray-600">Qtd</th>
+                <th className="text-right p-3 font-medium text-gray-600">Receita</th>
+                <th className="text-right p-3 font-medium text-gray-600">Custo</th>
+                <th className="text-right p-3 font-medium text-gray-600">Margem</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, i) => {
+                const margin = row.revenue > 0 ? ((row.revenue - row.cost) / row.revenue) * 100 : 0
+                return (
+                  <tr key={i} className="border-b last:border-0 hover:bg-gray-50">
+                    <td className="p-3 font-medium">{row.name}</td>
+                    <td className="p-3 text-right text-gray-600">{row.qty}</td>
+                    <td className="p-3 text-right text-green-600">{formatCurrency(row.revenue)}</td>
+                    <td className="p-3 text-right text-red-500">{formatCurrency(row.cost)}</td>
+                    <td className="p-3 text-right">
+                      <span className={margin >= 30 ? 'text-green-600 font-medium' : 'text-orange-500 font-medium'}>
+                        {margin.toFixed(1)}%
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
