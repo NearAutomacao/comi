@@ -98,17 +98,9 @@ export async function signIn(formData: FormData) {
 
   if (error) return { error: 'Email ou senha incorretos' }
 
-  // Usa admin client para buscar o perfil — bypassa RLS e problemas de schema exposto
-  const admin = await createAdminClient()
-  const { data: profile, error: profileError } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', data.user.id)
-    .single()
-
-  console.log('[signIn] profile:', profile, 'error:', profileError)
-
-  if (profile?.role === 'manager') redirect('/admin/dashboard')
+  // Lê o role direto dos metadados do JWT — não depende do schema exposto
+  const role = data.user.user_metadata?.role
+  if (role === 'manager') redirect('/admin/dashboard')
   redirect('/cardapio')
 }
 

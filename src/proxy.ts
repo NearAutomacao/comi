@@ -21,50 +21,23 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const comiSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      db: { schema: 'comi' },
-      cookies: {
-        getAll() { return request.cookies.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
+
+  // Lê role dos metadados do JWT — não depende de query ao banco
+  const role = user?.user_metadata?.role
 
   if (pathname.startsWith('/admin')) {
     if (!user) {
       return NextResponse.redirect(new URL('/login?redirect=/admin/dashboard', request.url))
     }
-    const { data: profile } = await comiSupabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role !== 'manager') {
+    if (role !== 'manager') {
       return NextResponse.redirect(new URL('/cardapio', request.url))
     }
   }
 
   if ((pathname === '/login' || pathname === '/cadastro') && user) {
-    const { data: profile } = await comiSupabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single()
-
-    if (profile?.role === 'manager') {
+    if (role === 'manager') {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
     }
     return NextResponse.redirect(new URL('/cardapio', request.url))
