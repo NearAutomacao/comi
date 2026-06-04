@@ -19,7 +19,7 @@ const nav = [
   { href: '/admin/configuracoes', label: 'Configurações', icon: Settings },
 ]
 
-export default function AdminSidebar({ managerName }: { managerName: string }) {
+export default function AdminSidebar({ managerName, restaurantName }: { managerName: string; restaurantName?: string }) {
   const pathname = usePathname()
 
   return (
@@ -29,10 +29,10 @@ export default function AdminSidebar({ managerName }: { managerName: string }) {
         <div className="p-4 border-b border-gray-700">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-orange-500 flex items-center justify-center">
-              <span className="text-sm font-bold">C</span>
+              <span className="text-sm font-bold">{(restaurantName ?? 'C')[0].toUpperCase()}</span>
             </div>
             <div>
-              <p className="font-bold text-sm">Comi Admin</p>
+              <p className="font-bold text-sm truncate max-w-[120px]">{restaurantName ?? 'Comi'}</p>
               <p className="text-xs text-gray-400">{managerName.split(' ')[0]}</p>
             </div>
           </div>

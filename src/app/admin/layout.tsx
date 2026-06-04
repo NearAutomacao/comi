@@ -8,15 +8,22 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!user) redirect('/login')
 
-  // Verifica role pelo JWT (app_metadata ou user_metadata) — não depende do schema comi
   const role = user.app_metadata?.role ?? user.user_metadata?.role
-  const name = user.user_metadata?.name ?? user.email ?? 'Gerente'
-
   if (role !== 'manager') redirect('/cardapio')
+
+  // Busca nome do restaurante (fallback para nome do usuário)
+  const { data: restaurant } = await supabase
+    .from('restaurants')
+    .select('name')
+    .eq('owner_id', user.id)
+    .single()
+
+  const managerName = user.user_metadata?.name ?? user.email ?? 'Gerente'
+  const restaurantName = restaurant?.name ?? 'Meu Restaurante'
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar managerName={name} />
+      <AdminSidebar managerName={managerName} restaurantName={restaurantName} />
       <main className="flex-1 overflow-auto">{children}</main>
     </div>
   )
