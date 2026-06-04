@@ -24,8 +24,7 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   const { pathname } = request.nextUrl
 
-  // Lê role dos metadados do JWT — não depende de query ao banco
-  const role = user?.user_metadata?.role
+  const role = user?.app_metadata?.role ?? user?.user_metadata?.role
 
   if (pathname.startsWith('/admin')) {
     if (!user) {

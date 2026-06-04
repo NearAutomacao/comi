@@ -28,12 +28,8 @@ export default function LoginPage() {
       return
     }
 
-    // Redirect baseado no role retornado pelo servidor
-    if (result?.role === 'manager') {
-      router.push('/admin/dashboard')
-    } else {
-      router.push('/cardapio')
-    }
+    // Hard redirect — força reload completo sem cache do proxy
+    window.location.href = result?.role === 'manager' ? '/admin/dashboard' : '/cardapio'
   }
 
   return (

@@ -98,7 +98,10 @@ export async function signIn(formData: FormData) {
 
   if (error) return { error: 'Email ou senha incorretos' }
 
-  const role = (data.user.user_metadata?.role as string) ?? 'customer'
+  // app_metadata é admin-controlled, user_metadata é fallback
+  const role = (data.user.app_metadata?.role as string)
+    ?? (data.user.user_metadata?.role as string)
+    ?? 'customer'
   return { role }
 }
 
