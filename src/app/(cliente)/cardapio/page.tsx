@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server'
-import { headers } from 'next/headers'
 import CategoryNav from '@/components/cardapio/CategoryNav'
 import MenuSection from '@/components/cardapio/MenuSection'
 import RestaurantStatus from '@/components/shared/RestaurantStatus'
@@ -7,11 +6,6 @@ import RestaurantStatus from '@/components/shared/RestaurantStatus'
 export const revalidate = 0 // Dynamic - no cache
 
 export default async function CardapioPage() {
-  // Disable browser cache on this dynamic page
-  const headersList = await headers()
-  headersList.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
-  headersList.set('Pragma', 'no-cache')
-  headersList.set('Expires', '0')
   const supabase = await createClient()
 
   // Pega o primeiro restaurante disponível
