@@ -29,7 +29,7 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
   useEffect(() => {
     const channel = supabase
       .channel('tables-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tables' }, payload => {
+      .on('postgres_changes', { event: '*', schema: 'comi', table: 'tables' }, payload => {
         if (payload.eventType === 'UPDATE') {
           setTables(prev => prev.map(t => t.id === (payload.new as Table).id ? { ...t, ...(payload.new as Table) } : t))
           toast.info(`Mesa ${(payload.new as Table).number} atualizada`)
@@ -41,7 +41,7 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
           setTables(prev => prev.filter(t => t.id !== (payload.old as Table).id))
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, payload => {
         toast('Novo pedido recebido!', { description: `Mesa notificada`, icon: '🍽️' })
       })
       .subscribe()

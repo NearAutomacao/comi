@@ -29,7 +29,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
   useEffect(() => {
     const channel = supabase
       .channel('orders-admin')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, async payload => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
         const { data } = await supabase
           .from('orders')
           .select('*, table:tables(number), order_items(*, menu_item:menu_items(name, price))')
@@ -40,7 +40,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
           toast('Novo pedido!', { description: `Mesa ${(data as Order & { table: { number: number } }).table?.number}`, icon: '🍽️' })
         }
       })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, payload => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {
         const updated = payload.new as Order
         if (['closed', 'cancelled'].includes(updated.status)) {
           setOrders(prev => prev.filter(o => o.id !== updated.id))
