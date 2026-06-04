@@ -207,8 +207,8 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
           </DialogHeader>
           {qrTable && (
             <div className="flex flex-col items-center gap-4 py-2">
-              <QRCode value={`${appUrl}/mesa/${qrTable.id}`} size={200} />
-              <p className="text-xs text-gray-400 break-all">{appUrl}/mesa/{qrTable.id}</p>
+              <QRCode value={`${appUrl}/checkin?table=${qrTable.id}`} size={200} />
+              <p className="text-xs text-gray-400 break-all">{appUrl}/checkin?table={qrTable.id}</p>
               <Button
                 variant="outline"
                 onClick={() => {
