@@ -7,10 +7,21 @@ export default async function ConfiguracoesPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const [{ data: restaurant }, { data: workingHours }, { data: closedDates }] = await Promise.all([
-    supabase.from('restaurants').select('*').eq('owner_id', user.id).single(),
-    supabase.from('working_hours').select('*').order('day_of_week'),
-    supabase.from('closed_dates').select('*').order('date'),
+  const { data: restaurant } = await supabase
+    .from('restaurants')
+    .select('*')
+    .eq('owner_id', user.id)
+    .single()
+
+  const restaurantId = restaurant?.id
+
+  const [{ data: workingHours }, { data: closedDates }] = await Promise.all([
+    restaurantId
+      ? supabase.from('working_hours').select('*').eq('restaurant_id', restaurantId).order('day_of_week')
+      : Promise.resolve({ data: [] }),
+    restaurantId
+      ? supabase.from('closed_dates').select('*').eq('restaurant_id', restaurantId).order('date')
+      : Promise.resolve({ data: [] }),
   ])
 
   return (
