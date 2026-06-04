@@ -98,14 +98,18 @@ export async function signIn(formData: FormData) {
 
   if (error) return { error: 'Email ou senha incorretos' }
 
-  const { data: profile } = await supabase
+  // Usa admin client para buscar o perfil — bypassa RLS e problemas de schema exposto
+  const admin = await createAdminClient()
+  const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('role')
     .eq('id', data.user.id)
     .single()
 
+  console.log('[signIn] profile:', profile, 'error:', profileError)
+
   if (profile?.role === 'manager') redirect('/admin/dashboard')
-  else redirect('/cardapio')
+  redirect('/cardapio')
 }
 
 export async function signOut() {
