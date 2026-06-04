@@ -20,10 +20,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const managerName = user.user_metadata?.name ?? user.email ?? 'Gerente'
   const restaurantName = restaurant?.name ?? 'Meu Restaurante'
+  const restaurantId = restaurant?.id ?? ''
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar managerName={managerName} restaurantName={restaurantName} />
+      <AdminSidebar managerName={managerName} restaurantName={restaurantName} restaurantId={restaurantId} />
       <main className="flex-1 overflow-auto">{children}</main>
     </div>
   )

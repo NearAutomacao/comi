@@ -48,11 +48,15 @@ export default function ClienteHeader({ userName }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [tableId])
 
-  const links = [
-    { href: '/cardapio', label: 'Cardápio', icon: BookOpen },
-    { href: '/reservas', label: 'Reservas', icon: Calendar },
-    { href: '/pedidos', label: 'Meus pedidos', icon: ClipboardList },
-  ]
+  const isGuest = !userName && !!guestName
+
+  const links = isGuest
+    ? [{ href: '/cardapio', label: 'Cardápio', icon: BookOpen }]
+    : [
+        { href: '/cardapio', label: 'Cardápio', icon: BookOpen },
+        { href: '/reservas', label: 'Reservas', icon: Calendar },
+        { href: '/pedidos', label: 'Meus pedidos', icon: ClipboardList },
+      ]
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
