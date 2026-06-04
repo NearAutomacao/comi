@@ -12,15 +12,8 @@ export const metadata: Metadata = {
   description: 'Cardápio digital, pedidos em tempo real e pagamento pelo celular para restaurantes e lanchonetes.',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'comi' },
-  icons: {
-    icon: [
-      { url: '/icon-16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
-    ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
-    shortcut: '/icon-32.png',
-  },
+  // favicon e apple-icon são servidos automaticamente pelo Next.js
+  // a partir de src/app/icon.png e src/app/apple-icon.png
 }
 
 export const viewport: Viewport = {
