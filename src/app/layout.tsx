@@ -8,14 +8,23 @@ const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Comi — Restaurante',
-  description: 'Cardápio online, reservas e pedidos',
+  title: 'comi — Gestão para restaurantes',
+  description: 'Cardápio digital, pedidos em tempo real e pagamento pelo celular para restaurantes e lanchonetes.',
   manifest: '/manifest.json',
-  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Comi' },
+  appleWebApp: { capable: true, statusBarStyle: 'black-translucent', title: 'comi' },
+  icons: {
+    icon: [
+      { url: '/icon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    shortcut: '/icon-32.png',
+  },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#e85d04',
+  themeColor: '#f97316',
   width: 'device-width',
   initialScale: 1,
 }
