@@ -57,9 +57,18 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
   }
 
   async function clearTable() {
-    await supabase.from('tables').update({ status: 'empty' }).eq('id', table.id)
-    if (table.current_order) await supabase.from('orders').update({ status: 'closed' }).eq('id', table.current_order.id)
-    onUpdate({ ...table, status: 'empty', current_order: null })
+    await supabase.from('tables')
+      .update({ status: 'empty', guest_name: null, guest_phone: null })
+      .eq('id', table.id)
+    if (table.current_order) {
+      await supabase.from('orders').update({ status: 'closed' }).eq('id', table.current_order.id)
+    }
+    // Fecha sessão do convidado no histórico
+    await supabase.from('table_sessions')
+      .update({ left_at: new Date().toISOString() })
+      .eq('table_id', table.id)
+      .is('left_at', null)
+    onUpdate({ ...table, status: 'empty', current_order: null, guest_name: null, guest_phone: null })
     toast.success('Mesa liberada')
     onClose()
   }

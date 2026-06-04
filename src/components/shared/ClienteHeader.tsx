@@ -51,11 +51,14 @@ export default function ClienteHeader({ userName }: Props) {
   const isGuest = !userName && !!guestName
 
   const links = isGuest
-    ? [{ href: '/cardapio', label: 'Cardápio', icon: BookOpen }]
+    ? [
+        { href: '/cardapio',    label: 'Cardápio',   icon: BookOpen },
+        ...(tableId ? [{ href: '/minha-mesa', label: 'Minha mesa', icon: ClipboardList }] : []),
+      ]
     : [
-        { href: '/cardapio', label: 'Cardápio', icon: BookOpen },
-        { href: '/reservas', label: 'Reservas', icon: Calendar },
-        { href: '/pedidos', label: 'Meus pedidos', icon: ClipboardList },
+        { href: '/cardapio', label: 'Cardápio',      icon: BookOpen },
+        { href: '/reservas', label: 'Reservas',       icon: Calendar },
+        { href: '/pedidos',  label: 'Meus pedidos',   icon: ClipboardList },
       ]
 
   return (

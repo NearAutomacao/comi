@@ -47,8 +47,8 @@ export default function CarrinhoPage() {
     }
 
     clearCart()
-    toast.success('Pedido enviado! O restaurante foi notificado.')
-    router.push('/cardapio')
+    toast.success('Pedido enviado! Acompanhe em Minha Mesa.')
+    router.push('/minha-mesa')
   }
 
   if (items.length === 0) {

@@ -1,17 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/server'
-import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 
 // GET /api/conta?tableId=xxx
-// Returns all open orders for a table (bypasses RLS via admin client)
+// Retorna pedidos abertos de uma mesa — acessível por convidados (sem sessão)
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const tableId = searchParams.get('tableId')
   if (!tableId) return NextResponse.json({ error: 'tableId required' }, { status: 400 })
-
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = await createAdminClient()
   const { data: orders, error } = await admin
@@ -27,7 +22,7 @@ export async function GET(req: Request) {
 }
 
 // POST /api/conta
-// Registers payments, closes all orders for the table, frees the table
+// Registra pagamento, fecha pedidos, libera mesa e encerra sessão do convidado
 export async function POST(req: Request) {
   const body = await req.json()
   const { tableId, payments } = body as {
@@ -36,16 +31,12 @@ export async function POST(req: Request) {
   }
 
   if (!tableId || !payments?.length) {
-    return NextResponse.json({ error: 'tableId and payments required' }, { status: 400 })
+    return NextResponse.json({ error: 'tableId e payments são obrigatórios' }, { status: 400 })
   }
-
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const admin = await createAdminClient()
 
-  // Insert payment records
+  // Registra pagamentos
   const { error: payError } = await admin.from('payments').insert(
     payments.map(p => ({
       restaurant_id: p.restaurant_id,
@@ -58,7 +49,7 @@ export async function POST(req: Request) {
   )
   if (payError) return NextResponse.json({ error: payError.message }, { status: 500 })
 
-  // Close all orders for the table
+  // Fecha todos os pedidos da mesa
   const orderIds = [...new Set(payments.map(p => p.order_id))]
   const { error: orderError } = await admin
     .from('orders')
@@ -66,12 +57,19 @@ export async function POST(req: Request) {
     .in('id', orderIds)
   if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 })
 
-  // Free the table
+  // Libera a mesa e apaga dados do convidado
   const { error: tableError } = await admin
     .from('tables')
-    .update({ status: 'empty' })
+    .update({ status: 'empty', guest_name: null, guest_phone: null })
     .eq('id', tableId)
   if (tableError) return NextResponse.json({ error: tableError.message }, { status: 500 })
+
+  // Marca fim da sessão do convidado
+  await admin
+    .from('table_sessions')
+    .update({ left_at: new Date().toISOString() })
+    .eq('table_id', tableId)
+    .is('left_at', null)
 
   return NextResponse.json({ ok: true })
 }
