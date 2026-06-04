@@ -1,43 +1,41 @@
 'use client'
 
 import { useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
 import { getDayName } from '@/lib/utils'
 import { toast } from 'sonner'
-import { CreditCard, Clock, CalendarX, Settings } from 'lucide-react'
-import type { WorkingHours, ClosedDate, RestaurantSettings } from '@/types'
+import { CreditCard, Clock, CalendarX, Settings, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
+import type { WorkingHours, ClosedDate, Restaurant } from '@/types'
 
 interface Props {
-  settings: RestaurantSettings | null
+  restaurant: Restaurant | null
   initialHours: WorkingHours[]
   initialClosedDates: ClosedDate[]
 }
 
-export default function ConfiguracoesClient({ settings, initialHours, initialClosedDates }: Props) {
-  const [restaurantName, setRestaurantName] = useState(settings?.restaurant_name ?? 'Comi')
-  const [mpToken, setMpToken] = useState(settings?.mercadopago_access_token ?? '')
-  const [mpPublicKey, setMpPublicKey] = useState(settings?.mercadopago_public_key ?? '')
+export default function ConfiguracoesClient({ restaurant, initialHours, initialClosedDates }: Props) {
+  const searchParams = useSearchParams()
+  const mpStatus = searchParams.get('mp')
+
+  const [restaurantName, setRestaurantName] = useState(restaurant?.name ?? '')
   const [hours, setHours] = useState(initialHours)
   const [closedDates, setClosedDates] = useState(initialClosedDates)
   const [newDate, setNewDate] = useState('')
   const [newDateReason, setNewDateReason] = useState('')
   const supabase = createClient()
 
-  async function saveSettings() {
-    if (settings?.id) {
-      await supabase.from('restaurant_settings').update({
-        restaurant_name: restaurantName,
-        mercadopago_access_token: mpToken || null,
-        mercadopago_public_key: mpPublicKey || null,
-      }).eq('id', settings.id)
-    }
-    toast.success('Configurações salvas')
+  const mpConnected = !!restaurant?.mp_access_token
+
+  async function saveRestaurantName() {
+    if (!restaurant?.id) return
+    await supabase.from('restaurants').update({ name: restaurantName }).eq('id', restaurant.id)
+    toast.success('Nome atualizado')
   }
 
   async function updateHours(hour: WorkingHours, field: keyof WorkingHours, value: string | boolean) {
@@ -46,24 +44,34 @@ export default function ConfiguracoesClient({ settings, initialHours, initialClo
   }
 
   async function addClosedDate() {
-    if (!newDate) return
+    if (!newDate || !restaurant?.id) return
     const { data } = await supabase
       .from('closed_dates')
-      .insert({ date: newDate, reason: newDateReason || null })
-      .select()
-      .single()
+      .insert({ restaurant_id: restaurant.id, date: newDate, reason: newDateReason || null })
+      .select().single()
     if (data) {
       setClosedDates(prev => [...prev, data as ClosedDate].sort((a, b) => a.date.localeCompare(b.date)))
       setNewDate('')
       setNewDateReason('')
-      toast.success('Data de fechamento adicionada')
+      toast.success('Data adicionada')
     }
   }
 
   async function removeClosedDate(id: string) {
     await supabase.from('closed_dates').delete().eq('id', id)
     setClosedDates(prev => prev.filter(d => d.id !== id))
-    toast.success('Removido')
+  }
+
+  async function disconnectMP() {
+    if (!restaurant?.id) return
+    await supabase.from('restaurants').update({
+      mp_access_token: null,
+      mp_refresh_token: null,
+      mp_public_key: null,
+      mp_user_id: null,
+    }).eq('id', restaurant.id)
+    toast.success('MercadoPago desconectado')
+    window.location.reload()
   }
 
   return (
@@ -72,21 +80,23 @@ export default function ConfiguracoesClient({ settings, initialHours, initialClo
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Settings size={18} className="text-orange-500" /> Geral
+            <Settings size={18} className="text-orange-500" /> Restaurante
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label>Nome do restaurante</Label>
-            <Input value={restaurantName} onChange={e => setRestaurantName(e.target.value)} />
+            <div className="flex gap-2">
+              <Input value={restaurantName} onChange={e => setRestaurantName(e.target.value)} />
+              <Button onClick={saveRestaurantName} className="bg-orange-500 hover:bg-orange-600 text-white">
+                Salvar
+              </Button>
+            </div>
           </div>
-          <Button onClick={saveSettings} className="bg-orange-500 hover:bg-orange-600 text-white">
-            Salvar
-          </Button>
         </CardContent>
       </Card>
 
-      {/* MercadoPago */}
+      {/* MercadoPago OAuth */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -94,29 +104,51 @@ export default function ConfiguracoesClient({ settings, initialHours, initialClo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Necessário para aceitar pagamentos de pedidos e reservas.
-          </p>
-          <div className="space-y-2">
-            <Label>Access Token (privado)</Label>
-            <Input
-              type="password"
-              value={mpToken}
-              onChange={e => setMpToken(e.target.value)}
-              placeholder="APP_USR-..."
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Public Key</Label>
-            <Input
-              value={mpPublicKey}
-              onChange={e => setMpPublicKey(e.target.value)}
-              placeholder="APP_USR-..."
-            />
-          </div>
-          <Button onClick={saveSettings} className="bg-green-600 hover:bg-green-700 text-white">
-            Salvar credenciais
-          </Button>
+          {mpStatus === 'success' && (
+            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">
+              <CheckCircle size={16} /> MercadoPago conectado com sucesso!
+            </div>
+          )}
+          {mpStatus === 'error' && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
+              <AlertCircle size={16} /> Erro ao conectar. Tente novamente.
+            </div>
+          )}
+
+          {mpConnected ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">
+                <CheckCircle size={16} />
+                <div>
+                  <p className="font-medium">Conta conectada</p>
+                  {restaurant?.mp_user_id && (
+                    <p className="text-xs text-green-600">ID: {restaurant.mp_user_id}</p>
+                  )}
+                </div>
+              </div>
+              <p className="text-sm text-gray-500">
+                Os pagamentos de pedidos e reservas serão recebidos diretamente na sua conta MercadoPago.
+              </p>
+              <Button onClick={disconnectMP} variant="outline" className="text-red-500 border-red-300 hover:bg-red-50 text-sm">
+                Desconectar conta
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-500">
+                Conecte sua conta MercadoPago para receber pagamentos de pedidos e reservas diretamente.
+              </p>
+              <a href="/api/mercadopago/connect">
+                <Button className="bg-[#009ee3] hover:bg-[#0082c0] text-white flex items-center gap-2">
+                  <ExternalLink size={16} />
+                  Conectar MercadoPago
+                </Button>
+              </a>
+              <p className="text-xs text-gray-400">
+                Você será redirecionado para o MercadoPago para autorizar o acesso.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -128,28 +160,18 @@ export default function ConfiguracoesClient({ settings, initialHours, initialClo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {hours.length === 0 && (
+            <p className="text-sm text-gray-400">Nenhum horário configurado.</p>
+          )}
           {hours.map(h => (
-            <div key={h.id} className="flex items-center gap-3">
-              <Switch
-                checked={h.is_open}
-                onCheckedChange={v => updateHours(h, 'is_open', v)}
-              />
+            <div key={h.id} className="flex items-center gap-3 flex-wrap">
+              <Switch checked={h.is_open} onCheckedChange={v => updateHours(h, 'is_open', v)} />
               <span className="w-20 text-sm font-medium">{getDayName(h.day_of_week)}</span>
-              <Input
-                type="time"
-                value={h.open_time ?? ''}
-                disabled={!h.is_open}
-                onChange={e => updateHours(h, 'open_time', e.target.value)}
-                className="w-28 text-sm"
-              />
+              <Input type="time" value={h.open_time ?? ''} disabled={!h.is_open}
+                onChange={e => updateHours(h, 'open_time', e.target.value)} className="w-28 text-sm" />
               <span className="text-gray-400 text-sm">às</span>
-              <Input
-                type="time"
-                value={h.close_time ?? ''}
-                disabled={!h.is_open}
-                onChange={e => updateHours(h, 'close_time', e.target.value)}
-                className="w-28 text-sm"
-              />
+              <Input type="time" value={h.close_time ?? ''} disabled={!h.is_open}
+                onChange={e => updateHours(h, 'close_time', e.target.value)} className="w-28 text-sm" />
             </div>
           ))}
         </CardContent>
@@ -163,38 +185,20 @@ export default function ConfiguracoesClient({ settings, initialHours, initialClo
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
-            <Input
-              type="date"
-              value={newDate}
-              onChange={e => setNewDate(e.target.value)}
-              className="flex-1"
-            />
-            <Input
-              placeholder="Motivo (opcional)"
-              value={newDateReason}
-              onChange={e => setNewDateReason(e.target.value)}
-              className="flex-1"
-            />
-            <Button onClick={addClosedDate} className="bg-red-500 hover:bg-red-600 text-white">
-              Adicionar
-            </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="flex-1 min-w-32" />
+            <Input placeholder="Motivo (opcional)" value={newDateReason} onChange={e => setNewDateReason(e.target.value)} className="flex-1 min-w-32" />
+            <Button onClick={addClosedDate} className="bg-red-500 hover:bg-red-600 text-white">Adicionar</Button>
           </div>
-
           {closedDates.length === 0 ? (
-            <p className="text-sm text-gray-400">Nenhuma data fechada cadastrada</p>
+            <p className="text-sm text-gray-400">Nenhuma data fechada</p>
           ) : (
             <ul className="space-y-1.5">
               {closedDates.map(d => (
                 <li key={d.id} className="flex items-center justify-between text-sm bg-red-50 rounded-lg px-3 py-2">
                   <span className="font-medium">{new Date(d.date + 'T12:00').toLocaleDateString('pt-BR')}</span>
                   {d.reason && <span className="text-gray-500 text-xs">{d.reason}</span>}
-                  <button
-                    onClick={() => removeClosedDate(d.id)}
-                    className="text-red-400 hover:text-red-600 text-xs"
-                  >
-                    Remover
-                  </button>
+                  <button onClick={() => removeClosedDate(d.id)} className="text-red-400 hover:text-red-600 text-xs">Remover</button>
                 </li>
               ))}
             </ul>

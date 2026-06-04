@@ -23,8 +23,9 @@ export async function POST(request: Request) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
     const preference = await createReservationPreference({
+      restaurantId: reservation.restaurant_id,
       reservationId,
-      amount: 50, // Taxa de reserva fixa — pode ser configurável
+      amount: 50,
       description: `Reserva — Mesa ${tableNum} em ${reservation.date}`,
       customerEmail: user.email ?? '',
       successUrl: `${appUrl}/reservas?payment=success`,

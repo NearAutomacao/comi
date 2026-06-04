@@ -6,13 +6,27 @@ export interface Profile {
   phone: string | null
   cpf: string | null
   role: UserRole
+  restaurant_id: string | null
   created_at: string
 }
 
-export type MenuCategorySlug = 'porcoes' | 'lanches' | 'bebidas' | 'sobremesas' | 'outros'
+export interface Restaurant {
+  id: string
+  owner_id: string
+  name: string
+  slug: string | null
+  logo_url: string | null
+  address: string | null
+  mp_access_token: string | null
+  mp_public_key: string | null
+  mp_refresh_token: string | null
+  mp_user_id: string | null
+  created_at: string
+}
 
 export interface MenuCategory {
   id: string
+  restaurant_id: string
   name: string
   slug: string
   display_order: number
@@ -22,6 +36,7 @@ export interface MenuCategory {
 export interface CostItem {
   id: string
   menu_item_id: string
+  restaurant_id: string
   ingredient: string
   quantity: string
   unit_cost: number
@@ -29,6 +44,7 @@ export interface CostItem {
 
 export interface MenuItem {
   id: string
+  restaurant_id: string
   category_id: string
   name: string
   description: string | null
@@ -45,6 +61,7 @@ export type TableStatus = 'empty' | 'reserved' | 'occupied'
 
 export interface Table {
   id: string
+  restaurant_id: string
   number: number
   capacity: number
   pos_x: number
@@ -56,7 +73,8 @@ export interface Table {
 
 export interface WorkingHours {
   id: string
-  day_of_week: number // 0=Sunday, 6=Saturday
+  restaurant_id: string
+  day_of_week: number
   open_time: string | null
   close_time: string | null
   is_open: boolean
@@ -64,6 +82,7 @@ export interface WorkingHours {
 
 export interface ClosedDate {
   id: string
+  restaurant_id: string
   date: string
   reason: string | null
 }
@@ -73,6 +92,7 @@ export type PaymentStatus = 'unpaid' | 'paid' | 'refunded'
 
 export interface Reservation {
   id: string
+  restaurant_id: string
   table_id: string
   customer_id: string
   date: string
@@ -103,6 +123,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string
+  restaurant_id: string
   table_id: string
   customer_id: string | null
   status: OrderStatus
@@ -118,6 +139,7 @@ export type PaymentMethod = 'credit_card' | 'debit_card' | 'pix'
 
 export interface Payment {
   id: string
+  restaurant_id: string
   order_id: string | null
   reservation_id: string | null
   method: PaymentMethod
@@ -132,14 +154,6 @@ export interface PaymentPerson {
   name: string
   amount: number
   method: PaymentMethod
-}
-
-export interface RestaurantSettings {
-  id: string
-  mercadopago_access_token: string | null
-  mercadopago_public_key: string | null
-  restaurant_name: string
-  address: string | null
 }
 
 export interface TableColor {

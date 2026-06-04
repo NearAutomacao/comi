@@ -1,20 +1,22 @@
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago'
 import { createAdminClient } from '@/lib/supabase/server'
 
-async function getMPConfig() {
+async function getMPClientForRestaurant(restaurantId: string) {
   const supabase = await createAdminClient()
   const { data } = await supabase
-    .from('restaurant_settings')
-    .select('mercadopago_access_token')
+    .from('restaurants')
+    .select('mp_access_token')
+    .eq('id', restaurantId)
     .single()
 
-  const token = data?.mercadopago_access_token ?? process.env.MERCADOPAGO_ACCESS_TOKEN
-  if (!token) throw new Error('MercadoPago access token não configurado')
+  const token = data?.mp_access_token
+  if (!token) throw new Error('MercadoPago não conectado. Configure em Admin → Configurações.')
 
   return new MercadoPagoConfig({ accessToken: token })
 }
 
 export async function createReservationPreference(params: {
+  restaurantId: string
   reservationId: string
   amount: number
   description: string
@@ -22,7 +24,7 @@ export async function createReservationPreference(params: {
   successUrl: string
   failureUrl: string
 }) {
-  const client = await getMPConfig()
+  const client = await getMPClientForRestaurant(params.restaurantId)
   const preference = new Preference(client)
 
   const result = await preference.create({
@@ -49,8 +51,8 @@ export async function createReservationPreference(params: {
   return result
 }
 
-export async function getPaymentById(paymentId: string) {
-  const client = await getMPConfig()
+export async function getPaymentById(paymentId: string, restaurantId: string) {
+  const client = await getMPClientForRestaurant(restaurantId)
   const payment = new Payment(client)
   return payment.get({ id: paymentId })
 }
