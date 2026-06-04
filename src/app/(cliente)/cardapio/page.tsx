@@ -3,6 +3,8 @@ import CategoryNav from '@/components/cardapio/CategoryNav'
 import MenuSection from '@/components/cardapio/MenuSection'
 import RestaurantStatus from '@/components/shared/RestaurantStatus'
 
+export const revalidate = 0 // Dynamic - no cache
+
 export default async function CardapioPage() {
   const supabase = await createClient()
 
