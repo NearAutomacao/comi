@@ -182,12 +182,13 @@ export function getTableColor(table: Table): TableColor {
   if (table.status === 'reserved') {
     return { bg: 'bg-blue-200', border: 'border-blue-500', text: 'text-blue-800', label: 'Reservada' }
   }
+  // occupied — amarela assim que alguém senta, mesmo sem pedido ainda
   const total = table.current_order?.total ?? 0
   if (total === 0) {
-    return { bg: 'bg-gray-200', border: 'border-gray-400', text: 'text-gray-700', label: 'Ocupada' }
+    return { bg: 'bg-yellow-200', border: 'border-yellow-500', text: 'text-yellow-800', label: 'Ocupada' }
   }
   if (total <= 100) {
-    return { bg: 'bg-yellow-200', border: 'border-yellow-500', text: 'text-yellow-800', label: `R$ ${total.toFixed(2)}` }
+    return { bg: 'bg-yellow-300', border: 'border-yellow-600', text: 'text-yellow-900', label: `R$ ${total.toFixed(2)}` }
   }
   if (total <= 500) {
     return { bg: 'bg-orange-200', border: 'border-orange-500', text: 'text-orange-800', label: `R$ ${total.toFixed(2)}` }

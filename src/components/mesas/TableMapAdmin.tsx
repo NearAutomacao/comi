@@ -134,11 +134,11 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
         </Button>
         <div className="flex items-center gap-2 text-sm flex-wrap">
           {[
-            { color: 'bg-gray-300', label: 'Livre' },
-            { color: 'bg-blue-300', label: 'Reservada' },
-            { color: 'bg-yellow-300', label: 'até R$100' },
+            { color: 'bg-gray-300',   label: 'Livre' },
+            { color: 'bg-blue-300',   label: 'Reservada' },
+            { color: 'bg-yellow-200', label: 'Ocupada' },
             { color: 'bg-orange-300', label: 'R$100–500' },
-            { color: 'bg-green-300', label: 'acima R$500' },
+            { color: 'bg-green-300',  label: 'acima R$500' },
           ].map(({ color, label }) => (
             <span key={label} className="flex items-center gap-1">
               <span className={`w-3 h-3 rounded-full ${color}`} />
