@@ -120,11 +120,26 @@ export default function ClienteHeader({ userName }: Props) {
             </Button>
           </Link>
 
-          <form action={signOut}>
-            <Button variant="ghost" size="icon" type="submit" title="Sair">
+          {isGuest ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Sair da mesa"
+              onClick={() => {
+                clearSession()
+                document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'
+                window.location.href = '/'
+              }}
+            >
               <LogOut size={18} />
             </Button>
-          </form>
+          ) : (
+            <form action={signOut}>
+              <Button variant="ghost" size="icon" type="submit" title="Sair">
+                <LogOut size={18} />
+              </Button>
+            </form>
+          )}
         </div>
       </div>
 
