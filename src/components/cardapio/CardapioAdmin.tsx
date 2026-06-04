@@ -18,6 +18,7 @@ import type { MenuCategory, MenuItem, CostItem } from '@/types'
 import Image from 'next/image'
 
 interface Props {
+  restaurantId: string
   initialCategories: MenuCategory[]
   initialItems: MenuItem[]
 }
@@ -37,7 +38,7 @@ const emptyForm = (): ItemForm => ({
   cost_items: [{ ingredient: '', quantity: '', unit_cost: '0' }],
 })
 
-export default function CardapioAdmin({ initialCategories, initialItems }: Props) {
+export default function CardapioAdmin({ restaurantId, initialCategories, initialItems }: Props) {
   const [categories, setCategories] = useState(initialCategories)
   const [items, setItems] = useState(initialItems)
   const [editing, setEditing] = useState<MenuItem | null>(null)
@@ -88,6 +89,7 @@ export default function CardapioAdmin({ initialCategories, initialItems }: Props
     }
 
     const payload = {
+      restaurant_id: restaurantId,
       name: form.name,
       description: form.description || null,
       price,
@@ -99,17 +101,19 @@ export default function CardapioAdmin({ initialCategories, initialItems }: Props
     let itemId = editing?.id
 
     if (editing) {
-      await supabase.from('menu_items').update(payload).eq('id', editing.id)
+      const { error } = await supabase.from('menu_items').update(payload).eq('id', editing.id)
+      if (error) { toast.error('Erro ao atualizar: ' + error.message); return }
       await supabase.from('cost_items').delete().eq('menu_item_id', editing.id)
     } else {
-      const { data } = await supabase.from('menu_items').insert(payload).select().single()
+      const { data, error } = await supabase.from('menu_items').insert(payload).select().single()
+      if (error) { toast.error('Erro ao salvar: ' + error.message); return }
       itemId = data?.id
     }
 
     if (itemId) {
       const costPayloads = form.cost_items
         .filter(c => c.ingredient)
-        .map(c => ({ menu_item_id: itemId!, ingredient: c.ingredient, quantity: c.quantity || null, unit_cost: parseFloat(c.unit_cost) || 0 }))
+        .map(c => ({ restaurant_id: restaurantId, menu_item_id: itemId!, ingredient: c.ingredient, quantity: c.quantity || null, unit_cost: parseFloat(c.unit_cost) || 0 }))
       if (costPayloads.length) await supabase.from('cost_items').insert(costPayloads)
     }
 
