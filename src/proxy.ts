@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Proxy mínimo: só atualiza cookies de sessão, proteção feita nos layouts
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -21,26 +22,8 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const { pathname } = request.nextUrl
-
-  const role = user?.app_metadata?.role ?? user?.user_metadata?.role
-
-  if (pathname.startsWith('/admin')) {
-    if (!user) {
-      return NextResponse.redirect(new URL('/login?redirect=/admin/dashboard', request.url))
-    }
-    if (role !== 'manager') {
-      return NextResponse.redirect(new URL('/cardapio', request.url))
-    }
-  }
-
-  if ((pathname === '/login' || pathname === '/cadastro') && user) {
-    if (role === 'manager') {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url))
-    }
-    return NextResponse.redirect(new URL('/cardapio', request.url))
-  }
+  // Necessário para manter a sessão atualizada
+  await supabase.auth.getUser()
 
   return supabaseResponse
 }
