@@ -1,12 +1,19 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Proxy mínimo: só atualiza cookies de sessão, proteção feita nos layouts
+// Rotas que exigem autenticação — redireciona para /login?next=<path>
+const PROTECTED = ['/mesa', '/cardapio', '/carrinho', '/pedidos', '/reservas', '/conta']
+
+function isProtected(pathname: string) {
+  return PROTECTED.some(p => pathname === p || pathname.startsWith(p + '/'))
+}
+
 export async function proxy(request: NextRequest) {
+  const { pathname } = request.nextUrl
   let supabaseResponse = NextResponse.next({ request })
 
-  // Disable cache on /cardapio path
-  if (request.nextUrl.pathname === '/cardapio') {
+  // No-cache no cardápio para sempre mostrar itens frescos
+  if (pathname === '/cardapio' || pathname.startsWith('/cardapio/')) {
     supabaseResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
     supabaseResponse.headers.set('Pragma', 'no-cache')
     supabaseResponse.headers.set('Expires', '0')
@@ -16,13 +23,13 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      db: { schema: 'comi' },
       cookies: {
         getAll() { return request.cookies.getAll() },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
-          // Re-apply cache headers if needed
-          if (request.nextUrl.pathname === '/cardapio') {
+          if (pathname === '/cardapio' || pathname.startsWith('/cardapio/')) {
             supabaseResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
             supabaseResponse.headers.set('Pragma', 'no-cache')
             supabaseResponse.headers.set('Expires', '0')
@@ -35,8 +42,15 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  // Necessário para manter a sessão atualizada
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // Redireciona rotas protegidas para /login?next=<path>
+  if (!user && isProtected(pathname)) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    url.searchParams.set('next', pathname)
+    return NextResponse.redirect(url)
+  }
 
   return supabaseResponse
 }
