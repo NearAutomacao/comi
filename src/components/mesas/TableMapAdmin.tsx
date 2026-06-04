@@ -23,6 +23,7 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
   const [dragging, setDragging] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const mapRef = useRef<HTMLDivElement>(null)
+  const dragMovedRef = useRef(false)
   const supabase = createClient()
 
   // Realtime subscription
@@ -67,18 +68,18 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
 
   function handleMouseDown(e: React.MouseEvent, tableId: string) {
     if ((e.target as HTMLElement).closest('button')) return
+    dragMovedRef.current = false
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const mapRect = mapRef.current!.getBoundingClientRect()
     setDragOffset({
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     })
     setDragging(tableId)
-    e.preventDefault()
   }
 
   function handleMouseMove(e: React.MouseEvent) {
     if (!dragging || !mapRef.current) return
+    dragMovedRef.current = true
     const mapRect = mapRef.current.getBoundingClientRect()
     const x = Math.max(0, Math.min(95, ((e.clientX - mapRect.left - dragOffset.x) / mapRect.width) * 100))
     const y = Math.max(0, Math.min(95, ((e.clientY - mapRect.top - dragOffset.y) / mapRect.height) * 100))
@@ -154,7 +155,7 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
               className={`absolute w-14 h-14 rounded-xl border-2 flex flex-col items-center justify-center cursor-grab active:cursor-grabbing shadow-sm transition-shadow hover:shadow-md ${colors.bg} ${colors.border}`}
               style={{ left: `${table.pos_x}%`, top: `${table.pos_y}%`, transform: 'translate(-50%,-50%)' }}
               onMouseDown={e => handleMouseDown(e, table.id)}
-              onClick={() => dragging === null && setSelected(table)}
+              onClick={() => !dragMovedRef.current && setSelected(table)}
             >
               <span className={`text-xs font-bold ${colors.text}`}>{table.number}</span>
               <span className={`text-xs ${colors.text} leading-none`}>{colors.label}</span>
