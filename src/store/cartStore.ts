@@ -8,7 +8,8 @@ interface CartStore {
   addItem: (item: MenuItem, notes?: string) => void
   removeItem: (menuItemId: string) => void
   updateQuantity: (menuItemId: string, quantity: number) => void
-  clearCart: () => void
+  clearCart: () => void   // limpa só os itens, mantém a mesa
+  clearSession: () => void // limpa tudo (saída da mesa)
   setTable: (tableId: string) => void
   total: () => number
   itemCount: () => number
@@ -52,7 +53,11 @@ export const useCartStore = create<CartStore>()(
         }))
       },
 
-      clearCart: () => set({ items: [], tableId: null }),
+      // Após finalizar pedido: limpa itens mas mantém mesa (cliente continua sentado)
+      clearCart: () => set({ items: [] }),
+
+      // Ao sair da mesa: limpa tudo
+      clearSession: () => set({ items: [], tableId: null }),
 
       setTable: (tableId) => set({ tableId }),
 
