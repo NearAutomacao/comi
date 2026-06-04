@@ -128,7 +128,8 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
   }
 
   async function deleteItem(id: string) {
-    await supabase.from('menu_items').delete().eq('id', id)
+    const { error } = await supabase.from('menu_items').delete().eq('id', id)
+    if (error) { toast.error('Não foi possível remover: ' + error.message); return }
     setItems(prev => prev.filter(i => i.id !== id))
     toast.success('Item removido')
   }
