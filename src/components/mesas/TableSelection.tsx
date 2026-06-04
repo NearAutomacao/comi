@@ -36,7 +36,7 @@ export default function TableSelection({ table, userId, blockedByOther }: Props)
       .update({ status: 'occupied' })
       .eq('id', table.id)
 
-    setTable(table.id)
+    setTable(table.id, table.number)
     setConfirmed(true)
     toast.success(`Mesa ${table.number} selecionada!`)
   }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ShoppingCart, BookOpen, Calendar, ClipboardList, LogOut } from 'lucide-react'
+import { ShoppingCart, BookOpen, Calendar, ClipboardList, LogOut, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useCartStore } from '@/store/cartStore'
@@ -15,6 +15,7 @@ interface Props {
 export default function ClienteHeader({ userName }: Props) {
   const pathname = usePathname()
   const itemCount = useCartStore(s => s.itemCount())
+  const tableNumber = useCartStore(s => s.tableNumber)
 
   const links = [
     { href: '/cardapio', label: 'Cardápio', icon: BookOpen },
@@ -50,7 +51,16 @@ export default function ClienteHeader({ userName }: Props) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Indicador de mesa */}
+          {tableNumber && (
+            <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
+              <MapPin size={13} className="text-orange-500" />
+              <span className="text-xs font-semibold text-orange-600">Mesa {tableNumber}</span>
+            </div>
+          )}
+
           <span className="hidden sm:block text-sm text-gray-600">Olá, {userName.split(' ')[0]}</span>
+
           <Link href="/carrinho" className="relative">
             <Button variant="ghost" size="icon" className="relative">
               <ShoppingCart size={20} />
@@ -61,6 +71,7 @@ export default function ClienteHeader({ userName }: Props) {
               )}
             </Button>
           </Link>
+
           <form action={signOut}>
             <Button variant="ghost" size="icon" type="submit" title="Sair">
               <LogOut size={18} />
@@ -76,19 +87,14 @@ export default function ClienteHeader({ userName }: Props) {
             key={href}
             href={href}
             className={`flex-1 flex flex-col items-center py-2 text-xs font-medium transition-colors ${
-              pathname.startsWith(href)
-                ? 'text-orange-600'
-                : 'text-gray-500'
+              pathname.startsWith(href) ? 'text-orange-600' : 'text-gray-500'
             }`}
           >
             <Icon size={20} />
             {label}
           </Link>
         ))}
-        <Link
-          href="/carrinho"
-          className="flex-1 flex flex-col items-center py-2 text-xs font-medium text-gray-500 relative"
-        >
+        <Link href="/carrinho" className="flex-1 flex flex-col items-center py-2 text-xs font-medium text-gray-500 relative">
           <div className="relative">
             <ShoppingCart size={20} />
             {itemCount > 0 && (
@@ -100,6 +106,14 @@ export default function ClienteHeader({ userName }: Props) {
           Carrinho
         </Link>
       </nav>
+
+      {/* Banner de mesa no mobile */}
+      {tableNumber && (
+        <div className="md:hidden bg-orange-50 border-b border-orange-100 px-4 py-1.5 flex items-center gap-1.5">
+          <MapPin size={13} className="text-orange-500" />
+          <span className="text-xs font-medium text-orange-600">Você está na Mesa {tableNumber}</span>
+        </div>
+      )}
     </header>
   )
 }

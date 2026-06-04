@@ -5,12 +5,13 @@ import type { CartItem, MenuItem } from '@/types'
 interface CartStore {
   items: CartItem[]
   tableId: string | null
+  tableNumber: number | null
   addItem: (item: MenuItem, notes?: string) => void
   removeItem: (menuItemId: string) => void
   updateQuantity: (menuItemId: string, quantity: number) => void
-  clearCart: () => void   // limpa só os itens, mantém a mesa
-  clearSession: () => void // limpa tudo (saída da mesa)
-  setTable: (tableId: string) => void
+  clearCart: () => void
+  clearSession: () => void
+  setTable: (tableId: string, tableNumber: number) => void
   total: () => number
   itemCount: () => number
 }
@@ -20,6 +21,7 @@ export const useCartStore = create<CartStore>()(
     (set, get) => ({
       items: [],
       tableId: null,
+      tableNumber: null,
 
       addItem: (menuItem, notes = '') => {
         set(state => {
@@ -53,13 +55,9 @@ export const useCartStore = create<CartStore>()(
         }))
       },
 
-      // Após finalizar pedido: limpa itens mas mantém mesa (cliente continua sentado)
       clearCart: () => set({ items: [] }),
-
-      // Ao sair da mesa: limpa tudo
-      clearSession: () => set({ items: [], tableId: null }),
-
-      setTable: (tableId) => set({ tableId }),
+      clearSession: () => set({ items: [], tableId: null, tableNumber: null }),
+      setTable: (tableId, tableNumber) => set({ tableId, tableNumber }),
 
       total: () => get().items.reduce((sum, i) => sum + i.menu_item.price * i.quantity, 0),
 
