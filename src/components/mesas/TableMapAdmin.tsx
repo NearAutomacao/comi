@@ -31,18 +31,34 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
       .channel('tables-realtime')
       .on('postgres_changes', { event: '*', schema: 'comi', table: 'tables' }, payload => {
         if (payload.eventType === 'UPDATE') {
-          setTables(prev => prev.map(t => t.id === (payload.new as Table).id ? { ...t, ...(payload.new as Table) } : t))
-          toast.info(`Mesa ${(payload.new as Table).number} atualizada`)
+          setTables(prev => prev.map(t =>
+            t.id === (payload.new as Table).id ? { ...t, ...(payload.new as Table) } : t
+          ))
         }
         if (payload.eventType === 'INSERT') {
-          setTables(prev => [...prev, payload.new as Table])
+          setTables(prev => [...prev, { ...(payload.new as Table), current_order: null }])
         }
         if (payload.eventType === 'DELETE') {
           setTables(prev => prev.filter(t => t.id !== (payload.old as Table).id))
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, payload => {
-        toast('Novo pedido recebido!', { description: `Mesa notificada`, icon: '🍽️' })
+      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
+        const newOrder = payload.new as { id: string; table_id: string; total: number; status: string }
+        toast('🍽️ Novo pedido!', { description: `Mesa sendo atendida` })
+        // Atualiza status da mesa
+        setTables(prev => prev.map(t =>
+          t.id === newOrder.table_id
+            ? { ...t, status: 'occupied' as const }
+            : t
+        ))
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {
+        const updated = payload.new as { id: string; table_id: string; total: number; status: string }
+        setTables(prev => prev.map(t => {
+          if (t.id !== updated.table_id) return t
+          if (!t.current_order) return t
+          return { ...t, current_order: { ...t.current_order, total: updated.total } }
+        }))
       })
       .subscribe()
 

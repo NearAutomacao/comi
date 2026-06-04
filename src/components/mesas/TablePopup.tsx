@@ -7,12 +7,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { getTableColor } from '@/types'
 import type { Table, OrderStatus } from '@/types'
 import { toast } from 'sonner'
 import PaymentModal from '@/components/pedidos/PaymentModal'
+import WaiterOrderDialog from './WaiterOrderDialog'
+import { PlusCircle } from 'lucide-react'
 
 interface Props {
   table: Table
@@ -32,11 +33,13 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
   const order = table.current_order
   const [orderStatus, setOrderStatus] = useState<OrderStatus>(order?.status ?? 'open')
   const [showPayment, setShowPayment] = useState(false)
+  const [showWaiterOrder, setShowWaiterOrder] = useState(false)
+  const [localOrder, setLocalOrder] = useState(order)
   const supabase = createClient()
 
   async function updateOrderStatus(status: OrderStatus) {
-    if (!order) return
-    await supabase.from('orders').update({ status }).eq('id', order.id)
+    if (!localOrder) return
+    await supabase.from('orders').update({ status }).eq('id', localOrder.id)
     setOrderStatus(status)
     if (status === 'closed') {
       await supabase.from('tables').update({ status: 'empty' }).eq('id', table.id)
@@ -50,10 +53,24 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
 
   async function clearTable() {
     await supabase.from('tables').update({ status: 'empty' }).eq('id', table.id)
-    if (order) await supabase.from('orders').update({ status: 'closed' }).eq('id', order.id)
+    if (localOrder) await supabase.from('orders').update({ status: 'closed' }).eq('id', localOrder.id)
     onUpdate({ ...table, status: 'empty', current_order: null })
     toast.success('Mesa liberada')
     onClose()
+  }
+
+  async function handleOrderSent(orderId: string, addedTotal: number) {
+    // Re-busca o pedido atualizado com itens
+    const { data: freshOrder } = await supabase
+      .from('orders')
+      .select('id, total, status, order_items(id, quantity, menu_item:menu_items(name))')
+      .eq('id', orderId)
+      .single()
+
+    if (freshOrder) {
+      setLocalOrder(freshOrder as unknown as typeof order)
+      onUpdate({ ...table, status: 'occupied', current_order: freshOrder as unknown as typeof order })
+    }
   }
 
   return (
@@ -70,10 +87,17 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
             </DialogTitle>
           </DialogHeader>
 
-          {!order ? (
-            <div className="text-center py-6 text-gray-400">
-              <p>Mesa livre — sem pedido ativo</p>
-              <Button onClick={clearTable} variant="outline" className="mt-4">
+          {!localOrder ? (
+            <div className="text-center py-6 space-y-3">
+              <p className="text-gray-400">Mesa livre</p>
+              <Button
+                onClick={() => setShowWaiterOrder(true)}
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+              >
+                <PlusCircle size={16} className="mr-2" />
+                Lançar pedido
+              </Button>
+              <Button onClick={clearTable} variant="outline" className="w-full">
                 Liberar mesa
               </Button>
             </div>
@@ -82,7 +106,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Itens do pedido</p>
                 <ul className="space-y-1">
-                  {(order.order_items ?? []).map((item: { id: string; quantity: number; menu_item?: { name: string } }) => (
+                  {(localOrder.order_items ?? []).map((item: { id: string; quantity: number; menu_item?: { name: string } }) => (
                     <li key={item.id} className="flex justify-between text-sm">
                       <span>{item.quantity}× {item.menu_item?.name}</span>
                     </li>
@@ -94,15 +118,13 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
 
               <div className="flex items-center justify-between font-bold">
                 <span>Total</span>
-                <span className="text-orange-600 text-lg">{formatCurrency(order.total ?? 0)}</span>
+                <span className="text-orange-600 text-lg">{formatCurrency(localOrder.total ?? 0)}</span>
               </div>
 
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-500">Status do pedido</p>
                 <Select value={orderStatus} onValueChange={v => updateOrderStatus(v as OrderStatus)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {statusOptions.map(o => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
@@ -111,32 +133,46 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
                 </Select>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-2 flex-wrap">
+                <Button
+                  onClick={() => setShowWaiterOrder(true)}
+                  variant="outline"
+                  className="flex-1 border-orange-300 text-orange-600"
+                >
+                  <PlusCircle size={15} className="mr-1" /> Adicionar itens
+                </Button>
                 <Button
                   onClick={() => setShowPayment(true)}
                   className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                 >
                   Pagamento
                 </Button>
-                <Button onClick={clearTable} variant="outline" className="flex-1">
-                  Liberar mesa
-                </Button>
               </div>
+              <Button onClick={clearTable} variant="outline" className="w-full">
+                Liberar mesa
+              </Button>
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      {showPayment && order && (
+      {showPayment && localOrder && (
         <PaymentModal
-          orderId={order.id}
+          orderId={localOrder.id}
           restaurantId={table.restaurant_id}
-          total={order.total ?? 0}
+          total={localOrder.total ?? 0}
           onClose={() => setShowPayment(false)}
-          onPaid={() => {
-            clearTable()
-            setShowPayment(false)
-          }}
+          onPaid={() => { clearTable(); setShowPayment(false) }}
+        />
+      )}
+
+      {showWaiterOrder && (
+        <WaiterOrderDialog
+          tableId={table.id}
+          restaurantId={table.restaurant_id}
+          existingOrderId={localOrder?.id ?? null}
+          onClose={() => setShowWaiterOrder(false)}
+          onSent={handleOrderSent}
         />
       )}
     </>
