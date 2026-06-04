@@ -130,6 +130,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
       {showPayment && order && (
         <PaymentModal
           orderId={order.id}
+          restaurantId={table.restaurant_id}
           total={order.total ?? 0}
           onClose={() => setShowPayment(false)}
           onPaid={() => {

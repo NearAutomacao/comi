@@ -125,6 +125,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
       {payingOrder && (
         <PaymentModal
           orderId={payingOrder.id}
+          restaurantId={(payingOrder as Order & { restaurant_id?: string }).restaurant_id ?? ''}
           total={payingOrder.total}
           onClose={() => setPayingOrder(null)}
           onPaid={() => {

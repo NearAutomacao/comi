@@ -15,6 +15,7 @@ import { ptBR } from 'date-fns/locale'
 
 interface Props {
   userId: string
+  restaurantId: string
   tables: { id: string; number: number; capacity: number }[]
   workingHours: { day_of_week: number; open_time: string | null; close_time: string | null; is_open: boolean }[]
   closedDates: string[]
@@ -36,7 +37,7 @@ const statusMap: Record<string, { label: string; class: string }> = {
   completed: { label: 'Concluída',            class: 'bg-gray-100 text-gray-600' },
 }
 
-export default function ReservasClient({ userId, tables, workingHours, closedDates, myReservations }: Props) {
+export default function ReservasClient({ userId, restaurantId, tables, workingHours, closedDates, myReservations }: Props) {
   const [date, setDate] = useState('')
   const [time, setTime] = useState('')
   const [tableId, setTableId] = useState('')
@@ -65,6 +66,7 @@ export default function ReservasClient({ userId, tables, workingHours, closedDat
     const { data: reservation, error } = await supabase
       .from('reservations')
       .insert({
+        restaurant_id: restaurantId,
         table_id: tableId,
         customer_id: userId,
         date,

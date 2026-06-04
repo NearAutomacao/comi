@@ -20,12 +20,13 @@ interface PersonPayment {
 
 interface Props {
   orderId: string
+  restaurantId: string
   total: number
   onClose: () => void
   onPaid: () => void
 }
 
-export default function PaymentModal({ orderId, total, onClose, onPaid }: Props) {
+export default function PaymentModal({ orderId, restaurantId, total, onClose, onPaid }: Props) {
   const [splitCount, setSplitCount] = useState(1)
   const [persons, setPersons] = useState<PersonPayment[]>([
     { name: '', amount: total, method: 'pix' },
@@ -61,6 +62,7 @@ export default function PaymentModal({ orderId, total, onClose, onPaid }: Props)
 
     for (const person of persons) {
       await supabase.from('payments').insert({
+        restaurant_id: restaurantId,
         order_id: orderId,
         method: person.method,
         amount: person.amount,

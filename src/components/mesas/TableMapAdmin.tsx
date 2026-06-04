@@ -12,10 +12,11 @@ import { QRCodeCanvas as QRCode } from 'qrcode.react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 interface Props {
+  restaurantId: string
   initialTables: Table[]
 }
 
-export default function TableMapAdmin({ initialTables }: Props) {
+export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
   const [tables, setTables] = useState<Table[]>(initialTables)
   const [selected, setSelected] = useState<Table | null>(null)
   const [qrTable, setQrTable] = useState<Table | null>(null)
@@ -79,11 +80,12 @@ export default function TableMapAdmin({ initialTables }: Props) {
 
   async function addTable() {
     const maxNum = tables.reduce((m, t) => Math.max(m, t.number), 0)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('tables')
-      .insert({ number: maxNum + 1, capacity: 4, pos_x: 10, pos_y: 10, status: 'empty' })
+      .insert({ restaurant_id: restaurantId, number: maxNum + 1, capacity: 4, pos_x: 10, pos_y: 10, status: 'empty' })
       .select()
       .single()
+    if (error) { toast.error('Erro: ' + error.message); return }
     if (data) {
       setTables(prev => [...prev, data as Table])
       toast.success(`Mesa ${data.number} adicionada`)

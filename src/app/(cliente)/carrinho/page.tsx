@@ -27,19 +27,34 @@ export default function CarrinhoPage() {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
+    // Busca o restaurant_id da mesa
+    const { data: table } = await supabase
+      .from('tables')
+      .select('restaurant_id')
+      .eq('id', tableId)
+      .single()
+
+    const restaurantId = table?.restaurant_id
+    if (!restaurantId) {
+      toast.error('Mesa inválida')
+      setLoading(false)
+      return
+    }
+
     const { data: order, error: orderError } = await supabase
       .from('orders')
-      .insert({ table_id: tableId, customer_id: user?.id ?? null, status: 'open' })
+      .insert({ restaurant_id: restaurantId, table_id: tableId, customer_id: user?.id ?? null, status: 'open' })
       .select()
       .single()
 
     if (orderError || !order) {
-      toast.error('Erro ao criar pedido')
+      toast.error('Erro ao criar pedido: ' + orderError?.message)
       setLoading(false)
       return
     }
 
     const orderItems = items.map(i => ({
+      restaurant_id: restaurantId,
       order_id: order.id,
       menu_item_id: i.menu_item.id,
       quantity: i.quantity,
