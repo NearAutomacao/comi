@@ -45,7 +45,7 @@ export default function RestaurantStatus({ workingHours, closedDates }: Props) {
 
       {!status.open && status.reason && (
         <p className="text-sm text-gray-500 mt-1">
-          {status.reason === 'fechado hoje' ? 'Fechado hoje' : `Abre ${status.reason}`}
+          {status.reason === 'fechado hoje' ? 'Fechado hoje' : status.reason}
         </p>
       )}
 
