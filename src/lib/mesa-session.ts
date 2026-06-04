@@ -33,7 +33,7 @@ export async function createMesaSessionToken(payload: Omit<MesaSessionPayload, '
 export async function verifyMesaSessionToken(token: string): Promise<MesaSessionPayload | null> {
   try {
     const verified = await jwtVerify(token, secret)
-    return verified.payload as MesaSessionPayload
+    return verified.payload as unknown as MesaSessionPayload
   } catch {
     return null
   }
