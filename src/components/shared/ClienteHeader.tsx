@@ -1,12 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { useEffect, useRef } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { ShoppingCart, BookOpen, Calendar, ClipboardList, LogOut, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useCartStore } from '@/store/cartStore'
 import { signOut } from '@/app/actions/auth'
+import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 
 interface Props {
   userName: string
@@ -14,8 +17,34 @@ interface Props {
 
 export default function ClienteHeader({ userName }: Props) {
   const pathname = usePathname()
+  const router = useRouter()
   const itemCount = useCartStore(s => s.itemCount())
   const tableNumber = useCartStore(s => s.tableNumber)
+  const tableId = useCartStore(s => s.tableId)
+  const clearSession = useCartStore(s => s.clearSession)
+  const supabase = useRef(createClient()).current
+
+  useEffect(() => {
+    if (!tableId) return
+
+    const channel = supabase
+      .channel(`table-session-${tableId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'comi', table: 'tables', filter: `id=eq.${tableId}` },
+        payload => {
+          const updated = payload.new as { status: string }
+          if (updated.status === 'empty') {
+            clearSession()
+            toast.info('Sua mesa foi liberada pelo restaurante.')
+            router.push('/cardapio')
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [tableId])
 
   const links = [
     { href: '/cardapio', label: 'Cardápio', icon: BookOpen },
