@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // Busca nome do restaurante (fallback para nome do usuário)
   const { data: restaurant } = await supabase
     .from('restaurants')
-    .select('name')
+    .select('id, name')
     .eq('owner_id', user.id)
     .single()
 
