@@ -31,6 +31,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
+    "jose": "^6.2.3",
     "lucide-react": "^1.17.0",
     "mercadopago": "^3.1.0",
     "next": "16.2.7",
@@ -40,6 +41,7 @@
     "react-dom": "19.2.4",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
+    "uuid": "^14.0.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
