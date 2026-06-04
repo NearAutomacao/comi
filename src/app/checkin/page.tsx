@@ -2,6 +2,7 @@
 
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +18,7 @@ function maskPhone(value: string) {
     .slice(0, 15)
 }
 
-export default function CheckinPage() {
+function CheckinContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const tableId = searchParams.get('table')
@@ -217,5 +218,17 @@ export default function CheckinPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function CheckinPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-orange-500" />
+      </div>
+    }>
+      <CheckinContent />
+    </Suspense>
   )
 }
