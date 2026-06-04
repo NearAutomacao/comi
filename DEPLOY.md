@@ -1,91 +1,97 @@
 # Deploy — COMI
-
-## 1. GitHub
-
-### Opção A: pelo terminal (instale o GitHub CLI primeiro)
-```
-winget install --id GitHub.cli
-gh auth login
-gh repo create comi --public --source=. --remote=origin --push
-```
-
-### Opção B: pelo site
-1. Acesse github.com → New repository
-2. Nome: **comi** → Create repository
-3. No terminal do projeto:
-```
-git remote add origin https://github.com/SEU_USUARIO/comi.git
-git branch -M main
-git push -u origin main
-```
+**Domínio:** `https://comi.awplabs.com.br`
 
 ---
 
-## 2. Supabase — Banco de dados
+## 1. Vercel — Deploy inicial
 
-1. Acesse supabase.com → Seu projeto → SQL Editor
-2. Cole todo o conteúdo de `supabase/migrations/001_initial.sql`
-3. Execute (Run)
-4. Anote as credenciais em: Settings → API
-
----
-
-## 3. Variáveis de ambiente (.env.local)
-
-Crie o arquivo `.env.local` na raiz do projeto:
-```
-NEXT_PUBLIC_SUPABASE_URL=https://SEU_PROJETO.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
-SUPABASE_SERVICE_ROLE_KEY=sua_service_role_key
-
-MERCADOPAGO_ACCESS_TOKEN=seu_token_mp
-NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY=sua_public_key_mp
-
-NEXT_PUBLIC_APP_URL=https://comi.vercel.app
-```
-
----
-
-## 4. Vercel
-
-### Opção A: CLI
-```
+### Via CLI
+```bash
 npm i -g vercel
 vercel login
 vercel --prod
 ```
-Quando perguntar sobre env vars, adicione as do passo 3.
 
-### Opção B: pelo site
-1. Acesse vercel.com → New Project
-2. Importe o repositório `comi` do GitHub
-3. Em **Environment Variables**, adicione as variáveis do .env.local
-4. Deploy!
+### Via site
+1. [vercel.com](https://vercel.com) → **New Project** → importar `NearAutomacao/comi`
+2. Framework: **Next.js** (detectado automaticamente)
+3. Adicionar as variáveis de ambiente abaixo → **Deploy**
 
 ---
 
-## 5. Criar gerente (admin) no Supabase
+## 2. Variáveis de ambiente na Vercel
 
-Após o deploy, crie um usuário gerente pelo Supabase:
-1. Authentication → Users → Invite user (email do gerente)
-2. Após o gerente confirmar email, execute no SQL Editor:
+Adicione em Project → Settings → Environment Variables:
+
+| Variável | Valor |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://yzimtqpktqethevzcjzy.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | *(do .env.local)* |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(do .env.local)* |
+| `NEXT_PUBLIC_APP_URL` | `https://comi.awplabs.com.br` |
+| `MERCADOPAGO_CLIENT_ID` | `6716533978473906` |
+| `MERCADOPAGO_CLIENT_SECRET` | *(do .env.local)* |
+| `MERCADOPAGO_ACCESS_TOKEN` | *(do .env.local)* |
+| `NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY` | `APP_USR-cde87684-4ab8-4f79-aa07-97c6c0cb05d0` |
+
+---
+
+## 3. Domínio personalizado na Vercel
+
+1. Vercel → Project → **Settings → Domains**
+2. Adicionar: `comi.awplabs.com.br`
+3. Vercel vai mostrar um registro CNAME para configurar no DNS
+
+---
+
+## 4. DNS — Registrar.br / provedor do domínio awplabs.com.br
+
+Adicionar registro CNAME:
+
+| Tipo | Nome | Valor |
+|---|---|---|
+| `CNAME` | `comi` | `cname.vercel-dns.com` |
+
+*(a Vercel mostra o valor exato no passo 3)*
+
+---
+
+## 5. Supabase — Migrations
+
+Execute em ordem no SQL Editor do Supabase:
+1. `supabase/migrations/001_initial.sql`
+2. `supabase/migrations/002_multitenant.sql`
+3. `supabase/migrations/003_grants.sql`
+4. `supabase/migrations/004_fix_table_rls.sql`
+
+---
+
+## 6. Criar gerente no Supabase
+
+1. Authentication → Users → **Invite user** (email do gerente)
+2. Após confirmar o email, execute:
 ```sql
-UPDATE profiles SET role = 'manager' WHERE id = 'UUID_DO_USUARIO';
+UPDATE comi.profiles SET role = 'manager' WHERE id = 'UUID_DO_USUARIO';
+```
+3. Criar o restaurante:
+```sql
+INSERT INTO comi.restaurants (owner_id, name)
+VALUES ('UUID_DO_USUARIO', 'Nome do Restaurante');
 ```
 
 ---
 
-## 6. MercadoPago — Webhook
+## 7. MercadoPago — Redirect URI
 
-Configure o webhook no painel do MercadoPago:
-- URL: `https://comi.vercel.app/api/webhooks/mercadopago`
+No painel [developers.mercadopago.com](https://developers.mercadopago.com) → seu app → **URLs de redirect**:
+```
+https://comi.awplabs.com.br/api/mercadopago/callback
+```
+
+---
+
+## 8. MercadoPago — Webhook
+
+Em Configurações → Webhooks → **Criar webhook**:
+- URL: `https://comi.awplabs.com.br/api/webhooks/mercadopago`
 - Eventos: `payment`
-
----
-
-## Rodando localmente
-
-```
-npm run dev
-# Acesse http://localhost:3000
-```
