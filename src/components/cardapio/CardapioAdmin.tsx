@@ -129,7 +129,17 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
 
   async function deleteItem(id: string) {
     const { error } = await supabase.from('menu_items').delete().eq('id', id)
-    if (error) { toast.error('Não foi possível remover: ' + error.message); return }
+    if (error) {
+      if (error.code === '23503') {
+        // FK violation: item has order history — disable instead of delete
+        await supabase.from('menu_items').update({ available: false }).eq('id', id)
+        setItems(prev => prev.map(i => i.id === id ? { ...i, available: false } : i))
+        toast.warning('Item tem pedidos vinculados. Foi desativado em vez de excluído.')
+        return
+      }
+      toast.error('Não foi possível remover: ' + error.message)
+      return
+    }
     setItems(prev => prev.filter(i => i.id !== id))
     toast.success('Item removido')
   }
