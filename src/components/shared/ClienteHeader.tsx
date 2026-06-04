@@ -22,6 +22,8 @@ export default function ClienteHeader({ userName }: Props) {
   const tableNumber = useCartStore(s => s.tableNumber)
   const tableId = useCartStore(s => s.tableId)
   const clearSession = useCartStore(s => s.clearSession)
+  const guestName = useCartStore(s => s.guestName)
+  const displayName = userName || guestName || ''
   const supabase = useRef(createClient()).current
 
   useEffect(() => {
@@ -96,7 +98,9 @@ export default function ClienteHeader({ userName }: Props) {
             </div>
           )}
 
-          <span className="hidden sm:block text-sm text-gray-600">Olá, {userName.split(' ')[0]}</span>
+          {displayName && (
+            <span className="hidden sm:block text-sm text-gray-600">Olá, {displayName.split(' ')[0]}</span>
+          )}
 
           <Link href="/carrinho" className="relative">
             <Button variant="ghost" size="icon" className="relative">

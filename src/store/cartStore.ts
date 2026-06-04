@@ -6,12 +6,16 @@ interface CartStore {
   items: CartItem[]
   tableId: string | null
   tableNumber: number | null
+  restaurantId: string | null
+  guestName: string | null
+  guestPhone: string | null
   addItem: (item: MenuItem, notes?: string) => void
   removeItem: (menuItemId: string) => void
   updateQuantity: (menuItemId: string, quantity: number) => void
   clearCart: () => void
   clearSession: () => void
   setTable: (tableId: string, tableNumber: number) => void
+  setGuest: (name: string, phone: string, restaurantId: string) => void
   total: () => number
   itemCount: () => number
 }
@@ -22,6 +26,9 @@ export const useCartStore = create<CartStore>()(
       items: [],
       tableId: null,
       tableNumber: null,
+      restaurantId: null,
+      guestName: null,
+      guestPhone: null,
 
       addItem: (menuItem, notes = '') => {
         set(state => {
@@ -56,8 +63,9 @@ export const useCartStore = create<CartStore>()(
       },
 
       clearCart: () => set({ items: [] }),
-      clearSession: () => set({ items: [], tableId: null, tableNumber: null }),
+      clearSession: () => set({ items: [], tableId: null, tableNumber: null, restaurantId: null, guestName: null, guestPhone: null }),
       setTable: (tableId, tableNumber) => set({ tableId, tableNumber }),
+      setGuest: (guestName, guestPhone, restaurantId) => set({ guestName, guestPhone, restaurantId }),
 
       total: () => get().items.reduce((sum, i) => sum + i.menu_item.price * i.quantity, 0),
 

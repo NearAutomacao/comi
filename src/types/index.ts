@@ -67,8 +67,20 @@ export interface Table {
   pos_x: number
   pos_y: number
   status: TableStatus
+  guest_name?: string | null
+  guest_phone?: string | null
   created_at: string
   current_order?: Order | null
+}
+
+export interface TableSession {
+  id: string
+  restaurant_id: string
+  table_id: string
+  guest_name: string
+  guest_phone: string
+  sat_at: string
+  left_at: string | null
 }
 
 export interface WorkingHours {

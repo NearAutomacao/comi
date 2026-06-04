@@ -1,8 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Rotas que exigem autenticação — redireciona para /login?next=<path>
-const PROTECTED = ['/mesa', '/cardapio', '/carrinho', '/pedidos', '/reservas', '/conta']
+// Apenas estas rotas exigem conta cadastrada
+// /mesa, /cardapio, /carrinho, /conta são acessíveis por convidados (QR code)
+const PROTECTED = ['/pedidos', '/reservas']
 
 function isProtected(pathname: string) {
   return PROTECTED.some(p => pathname === p || pathname.startsWith(p + '/'))

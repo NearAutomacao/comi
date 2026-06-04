@@ -91,6 +91,14 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
             </DialogTitle>
           </DialogHeader>
 
+          {/* Convidado atual */}
+          {table.guest_name && (
+            <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-sm flex items-center gap-3 mb-1">
+              <span className="font-semibold text-orange-700">{table.guest_name}</span>
+              <span className="text-orange-400">{table.guest_phone}</span>
+            </div>
+          )}
+
           {!table.current_order ? (
             <div className="text-center py-6 space-y-3">
               <p className="text-gray-400">Mesa livre</p>

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { notFound, redirect } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import TableSelection from '@/components/mesas/TableSelection'
 
 interface Props {
@@ -18,12 +18,9 @@ export default async function MesaPage({ params }: Props) {
 
   if (!table) notFound()
 
+  // Verifica se a mesa está bloqueada por uma reserva de outro cliente
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Check if table is blocked by another reservation
-  const now = new Date()
-  const today = now.toISOString().split('T')[0]
+  const today = new Date().toISOString().split('T')[0]
   const { data: activeReservation } = await supabase
     .from('reservations')
     .select('id, customer_id, status')
@@ -32,13 +29,12 @@ export default async function MesaPage({ params }: Props) {
     .in('status', ['pending', 'confirmed'])
     .maybeSingle()
 
-  const blockedByOther = activeReservation && activeReservation.customer_id !== user.id
+  const blockedByOther = !!(activeReservation && activeReservation.customer_id !== user?.id)
 
   return (
     <TableSelection
       table={table}
-      userId={user.id}
-      blockedByOther={!!blockedByOther}
+      blockedByOther={blockedByOther}
     />
   )
 }
