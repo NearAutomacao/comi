@@ -116,40 +116,13 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
   }
 
   async function deleteTable(id: string) {
-    try {
-      // Força limpeza: deleta table_sessions expiradas (CASCADE automático)
-      const { error: sessionError } = await supabase
-        .from('table_sessions')
-        .delete()
-        .eq('table_id', id)
-        .is('left_at', null)
-
-      // Define table_id = NULL em orders/reservations abertas
-      const { error: ordersError } = await supabase
-        .from('orders')
-        .update({ table_id: null })
-        .eq('table_id', id)
-        .in('status', ['open', 'preparing', 'served'])
-
-      const { error: resvError } = await supabase
-        .from('reservations')
-        .update({ table_id: null })
-        .eq('table_id', id)
-        .in('status', ['pending', 'confirmed'])
-
-      // Agora deleta a mesa (sem FK violations)
-      const { error } = await supabase.from('tables').delete().eq('id', id)
-      
-      if (error) {
-        toast.error('Erro ao remover: ' + error.message)
-        return
-      }
-
-      setTables(prev => prev.filter(t => t.id !== id))
-      toast.success('Mesa removida')
-    } catch (err) {
-      toast.error('Erro inesperado: ' + String(err))
+    const { error } = await supabase.from('tables').delete().eq('id', id)
+    if (error) {
+      toast.error('Erro ao remover: ' + error.message)
+      return
     }
+    setTables(prev => prev.filter(t => t.id !== id))
+    toast.success('Mesa removida')
   }
 
   // Usa a origem real do browser para o QR code funcionar em qualquer ambiente
