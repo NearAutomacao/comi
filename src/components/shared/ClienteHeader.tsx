@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { ShoppingCart, BookOpen, Calendar, ClipboardList, LogOut, MapPin } from 'lucide-react'
+import { ShoppingCart, BookOpen, Calendar, ClipboardList, LogOut, MapPin, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useCartStore } from '@/store/cartStore'
@@ -80,11 +80,19 @@ export default function ClienteHeader({ userName }: Props) {
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* Indicador de mesa */}
+          {/* Indicador de mesa + Fechar conta */}
           {tableNumber && (
-            <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
-              <MapPin size={13} className="text-orange-500" />
-              <span className="text-xs font-semibold text-orange-600">Mesa {tableNumber}</span>
+            <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
+                <MapPin size={13} className="text-orange-500" />
+                <span className="text-xs font-semibold text-orange-600">Mesa {tableNumber}</span>
+              </div>
+              <Link href="/conta">
+                <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-green-300 text-green-700 hover:bg-green-50 gap-1">
+                  <Receipt size={12} />
+                  Fechar conta
+                </Button>
+              </Link>
             </div>
           )}
 
@@ -138,9 +146,15 @@ export default function ClienteHeader({ userName }: Props) {
 
       {/* Banner de mesa no mobile */}
       {tableNumber && (
-        <div className="md:hidden bg-orange-50 border-b border-orange-100 px-4 py-1.5 flex items-center gap-1.5">
-          <MapPin size={13} className="text-orange-500" />
-          <span className="text-xs font-medium text-orange-600">Você está na Mesa {tableNumber}</span>
+        <div className="md:hidden bg-orange-50 border-b border-orange-100 px-4 py-1.5 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <MapPin size={13} className="text-orange-500" />
+            <span className="text-xs font-medium text-orange-600">Você está na Mesa {tableNumber}</span>
+          </div>
+          <Link href="/conta" className="flex items-center gap-1 text-xs font-semibold text-green-700">
+            <Receipt size={12} />
+            Fechar conta
+          </Link>
         </div>
       )}
     </header>
