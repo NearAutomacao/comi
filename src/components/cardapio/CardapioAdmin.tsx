@@ -16,6 +16,7 @@ import { Plus, Pencil, Trash2, ImagePlus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { MenuCategory, MenuItem, CostItem } from '@/types'
 import Image from 'next/image'
+import { revalidateCardapio } from '@/app/admin/cardapio/actions'
 
 interface Props {
   restaurantId: string
@@ -124,18 +125,21 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
     }
 
     toast.success(editing ? 'Item atualizado' : 'Item adicionado')
+    await revalidateCardapio()
     setOpen(false)
   }
 
   async function deleteItem(id: string) {
     await supabase.from('menu_items').delete().eq('id', id)
     setItems(prev => prev.filter(i => i.id !== id))
+    await revalidateCardapio()
     toast.success('Item removido')
   }
 
   async function toggleAvailable(item: MenuItem) {
     await supabase.from('menu_items').update({ available: !item.available }).eq('id', item.id)
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, available: !i.available } : i))
+    await revalidateCardapio()
   }
 
   const filteredItems = items.filter(i => i.category_id === activeCategory)
