@@ -116,7 +116,15 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
   }
 
   async function deleteTable(id: string) {
-    await supabase.from('tables').delete().eq('id', id)
+    const { error } = await supabase.from('tables').delete().eq('id', id)
+    if (error) {
+      if (error.code === '23503') {
+        toast.error('Mesa tem pedidos vinculados. Libere a mesa antes de remover.')
+      } else {
+        toast.error('Não foi possível remover: ' + error.message)
+      }
+      return
+    }
     setTables(prev => prev.filter(t => t.id !== id))
     toast.success('Mesa removida')
   }
