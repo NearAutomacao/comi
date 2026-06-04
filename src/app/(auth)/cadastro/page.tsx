@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
 import { signUp } from '@/app/actions/auth'
@@ -28,7 +28,7 @@ function maskPhone(value: string) {
     .slice(0, 15)
 }
 
-export default function CadastroPage() {
+function CadastroForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [cpf, setCpf] = useState('')
@@ -121,4 +121,8 @@ export default function CadastroPage() {
       </Card>
     </main>
   )
+}
+
+export default function CadastroPage() {
+  return <Suspense><CadastroForm /></Suspense>
 }
