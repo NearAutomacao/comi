@@ -121,7 +121,10 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
     toast.success('Mesa removida')
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  // Usa a origem real do browser para o QR code funcionar em qualquer ambiente
+  const appUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : (process.env.NEXT_PUBLIC_APP_URL ?? 'https://comi.awplabs.com.br')
 
   return (
     <div>

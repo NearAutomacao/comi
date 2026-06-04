@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { signIn } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,8 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const next = searchParams.get('next')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -26,6 +28,12 @@ export default function LoginPage() {
     if (result?.error) {
       setError(result.error)
       setLoading(false)
+      return
+    }
+
+    // Se veio de uma URL específica (ex: /mesa/uuid via QR code), volta pra lá
+    if (next) {
+      window.location.href = next
       return
     }
 
@@ -67,7 +75,10 @@ export default function LoginPage() {
           </form>
           <p className="text-center text-sm text-gray-600 mt-4">
             Não tem conta?{' '}
-            <Link href="/cadastro" className="text-orange-600 font-medium hover:underline">
+            <Link
+              href={next ? `/cadastro?next=${encodeURIComponent(next)}` : '/cadastro'}
+              className="text-orange-600 font-medium hover:underline"
+            >
               Cadastre-se
             </Link>
           </p>

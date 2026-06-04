@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Image from 'next/image'
+import { useSearchParams } from 'next/navigation'
 import { signUp } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,6 +33,8 @@ export default function CadastroPage() {
   const [loading, setLoading] = useState(false)
   const [cpf, setCpf] = useState('')
   const [phone, setPhone] = useState('')
+  const searchParams = useSearchParams()
+  const next = searchParams.get('next')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -40,6 +43,7 @@ export default function CadastroPage() {
     const form = new FormData(e.currentTarget)
     form.set('cpf', cpf)
     form.set('phone', phone)
+    if (next) form.set('next', next)
     const result = await signUp(form)
     if (result?.error) {
       setError(result.error)

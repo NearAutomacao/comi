@@ -28,6 +28,8 @@ export async function signUp(formData: FormData) {
   if (!data.user) return { error: 'Erro ao criar conta' }
 
   // Para gerentes: criar o restaurante automaticamente
+  const next = formData.get('next') as string | null
+
   if (isManager) {
     const admin = await createAdminClient()
 
@@ -75,7 +77,7 @@ export async function signUp(formData: FormData) {
     redirect('/admin/dashboard')
   }
 
-  redirect('/cardapio')
+  redirect(next ?? '/cardapio')
 }
 
 export async function signUpManager(formData: FormData) {
