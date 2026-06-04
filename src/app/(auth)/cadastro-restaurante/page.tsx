@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { signUpManager } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,11 +51,11 @@ export default function CadastroRestaurantePage() {
         {/* Benefícios */}
         <div className="hidden md:block">
           <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center">
-              <span className="text-xl text-white font-bold">C</span>
-            </div>
+            <Image src="/icomi-nobg.png" alt="comi" width={52} height={52} />
             <div>
-              <h1 className="text-2xl font-bold text-orange-600">Comi</h1>
+              <h1 className="text-2xl font-black" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                com<span className="text-orange-500">i</span>
+              </h1>
               <p className="text-sm text-gray-500">Sistema para restaurantes</p>
             </div>
           </div>
@@ -74,10 +75,10 @@ export default function CadastroRestaurantePage() {
         {/* Formulário */}
         <Card className="shadow-lg">
           <CardHeader className="text-center">
-            <div className="w-12 h-12 rounded-full bg-orange-500 flex items-center justify-center mx-auto mb-2 md:hidden">
-              <Store size={22} className="text-white" />
-            </div>
-            <CardTitle className="text-xl text-orange-600">Cadastrar restaurante</CardTitle>
+            <Image src="/icomi-nobg.png" alt="comi" width={52} height={52} className="mx-auto mb-1 md:hidden" />
+            <CardTitle className="text-xl font-black" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              Cadastrar restaurante
+            </CardTitle>
             <CardDescription>Crie sua conta de gerente gratuitamente</CardDescription>
           </CardHeader>
           <CardContent>

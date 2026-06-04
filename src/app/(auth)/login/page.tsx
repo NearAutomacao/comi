@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Loader2 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -36,10 +37,10 @@ export default function LoginPage() {
     <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100 px-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="text-center">
-          <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center mx-auto mb-3">
-            <span className="text-2xl text-white font-bold">C</span>
-          </div>
-          <CardTitle className="text-2xl text-orange-600">Entrar</CardTitle>
+          <Image src="/icomi-nobg.png" alt="comi" width={72} height={72} className="mx-auto mb-2" priority />
+          <CardTitle className="text-2xl font-black" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            com<span className="text-orange-500">i</span>
+          </CardTitle>
           <CardDescription>Acesse seu cardápio e reservas</CardDescription>
         </CardHeader>
         <CardContent>
