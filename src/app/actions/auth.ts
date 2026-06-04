@@ -98,10 +98,8 @@ export async function signIn(formData: FormData) {
 
   if (error) return { error: 'Email ou senha incorretos' }
 
-  // Lê o role direto dos metadados do JWT — não depende do schema exposto
-  const role = data.user.user_metadata?.role
-  if (role === 'manager') redirect('/admin/dashboard')
-  redirect('/cardapio')
+  const role = (data.user.user_metadata?.role as string) ?? 'customer'
+  return { role }
 }
 
 export async function signOut() {

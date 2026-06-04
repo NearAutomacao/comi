@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { signIn } from '@/app/actions/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,15 +13,26 @@ import { Loader2 } from 'lucide-react'
 export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
     setError('')
+
     const result = await signIn(new FormData(e.currentTarget))
+
     if (result?.error) {
       setError(result.error)
       setLoading(false)
+      return
+    }
+
+    // Redirect baseado no role retornado pelo servidor
+    if (result?.role === 'manager') {
+      router.push('/admin/dashboard')
+    } else {
+      router.push('/cardapio')
     }
   }
 
