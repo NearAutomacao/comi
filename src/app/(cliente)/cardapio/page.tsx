@@ -6,16 +6,33 @@ import RestaurantStatus from '@/components/shared/RestaurantStatus'
 export default async function CardapioPage() {
   const supabase = await createClient()
 
+  // Pega o primeiro restaurante disponível
+  const { data: restaurant } = await supabase
+    .from('restaurants')
+    .select('id, name')
+    .limit(1)
+    .single()
+
+  const restaurantId = restaurant?.id
+
   const [
     { data: categories },
     { data: items },
     { data: workingHours },
     { data: closedDates },
   ] = await Promise.all([
-    supabase.from('menu_categories').select('*').order('display_order'),
-    supabase.from('menu_items').select('*, category:menu_categories(*)').eq('available', true).order('display_order'),
-    supabase.from('working_hours').select('*'),
-    supabase.from('closed_dates').select('date'),
+    restaurantId
+      ? supabase.from('menu_categories').select('*').eq('restaurant_id', restaurantId).order('display_order')
+      : Promise.resolve({ data: [] }),
+    restaurantId
+      ? supabase.from('menu_items').select('*, category:menu_categories(*)').eq('restaurant_id', restaurantId).eq('available', true).order('display_order')
+      : Promise.resolve({ data: [] }),
+    restaurantId
+      ? supabase.from('working_hours').select('*').eq('restaurant_id', restaurantId).order('day_of_week')
+      : Promise.resolve({ data: [] }),
+    restaurantId
+      ? supabase.from('closed_dates').select('date').eq('restaurant_id', restaurantId)
+      : Promise.resolve({ data: [] }),
   ])
 
   const grouped = (categories ?? []).map(cat => ({
@@ -32,13 +49,22 @@ export default async function CardapioPage() {
         />
       </div>
 
-      <CategoryNav categories={categories ?? []} />
+      {categories && categories.length > 0 && (
+        <CategoryNav categories={categories} />
+      )}
 
       <div className="space-y-8 mt-4">
         {grouped.map(({ category, items }) =>
           items.length > 0 ? (
             <MenuSection key={category.id} category={category} items={items} />
           ) : null
+        )}
+
+        {grouped.every(g => g.items.length === 0) && (
+          <div className="text-center py-16 text-gray-400">
+            <p className="text-lg">Cardápio em breve</p>
+            <p className="text-sm mt-1">O restaurante ainda está configurando o cardápio</p>
+          </div>
         )}
       </div>
     </div>
