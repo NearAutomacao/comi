@@ -44,12 +44,18 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
         }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
-        const newOrder = payload.new as { id: string; table_id: string; total: number; status: string }
+        const newOrder = payload.new as { id: string; table_id: string; total: number; status: string; restaurant_id: string; customer_id?: string; payment_status: string; created_at: string }
         toast('🍽️ Novo pedido!', { description: `Mesa sendo atendida` })
-        // Atualiza status da mesa
+        // Busca o pedido completo com itens
+        const { data: completeOrder } = await supabase
+          .from('orders')
+          .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, menu_item:menu_items(name))')
+          .eq('id', newOrder.id)
+          .single()
+        // Atualiza mesa com current_order
         setTables(prev => prev.map(t =>
           t.id === newOrder.table_id
-            ? { ...t, status: 'occupied' as const }
+            ? { ...t, status: 'occupied' as const, current_order: completeOrder as any }
             : t
         ))
       })
@@ -180,7 +186,7 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
 
       {selected && (
         <TablePopup
-          table={selected}
+          table={tables.find(t => t.id === selected.id) || selected}
           onClose={() => setSelected(null)}
           onUpdate={updated => setTables(prev => prev.map(t => t.id === updated.id ? updated : t))}
         />

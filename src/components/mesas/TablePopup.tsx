@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatCurrency } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -30,16 +30,21 @@ const statusOptions: { value: OrderStatus; label: string }[] = [
 
 export default function TablePopup({ table, onClose, onUpdate }: Props) {
   const colors = getTableColor(table)
-  const order = table.current_order
-  const [orderStatus, setOrderStatus] = useState<OrderStatus>(order?.status ?? 'open')
+  const [orderStatus, setOrderStatus] = useState<OrderStatus>(table.current_order?.status ?? 'open')
   const [showPayment, setShowPayment] = useState(false)
   const [showWaiterOrder, setShowWaiterOrder] = useState(false)
-  const [localOrder, setLocalOrder] = useState(order)
   const supabase = createClient()
 
+  // Acompanha mudanças no current_order da mesa
+  useEffect(() => {
+    if (table.current_order) {
+      setOrderStatus(table.current_order.status ?? 'open')
+    }
+  }, [table.current_order?.id, table.current_order?.status, table.current_order?.total])
+
   async function updateOrderStatus(status: OrderStatus) {
-    if (!localOrder) return
-    await supabase.from('orders').update({ status }).eq('id', localOrder.id)
+    if (!table.current_order) return
+    await supabase.from('orders').update({ status }).eq('id', table.current_order.id)
     setOrderStatus(status)
     if (status === 'closed') {
       await supabase.from('tables').update({ status: 'empty' }).eq('id', table.id)
@@ -53,7 +58,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
 
   async function clearTable() {
     await supabase.from('tables').update({ status: 'empty' }).eq('id', table.id)
-    if (localOrder) await supabase.from('orders').update({ status: 'closed' }).eq('id', localOrder.id)
+    if (table.current_order) await supabase.from('orders').update({ status: 'closed' }).eq('id', table.current_order.id)
     onUpdate({ ...table, status: 'empty', current_order: null })
     toast.success('Mesa liberada')
     onClose()
@@ -68,8 +73,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
       .single()
 
     if (freshOrder) {
-      setLocalOrder(freshOrder as unknown as typeof order)
-      onUpdate({ ...table, status: 'occupied', current_order: freshOrder as unknown as typeof order })
+      onUpdate({ ...table, status: 'occupied', current_order: freshOrder as unknown as typeof table.current_order })
     }
   }
 
@@ -87,7 +91,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
             </DialogTitle>
           </DialogHeader>
 
-          {!localOrder ? (
+          {!table.current_order ? (
             <div className="text-center py-6 space-y-3">
               <p className="text-gray-400">Mesa livre</p>
               <Button
@@ -106,7 +110,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
               <div>
                 <p className="text-sm font-medium text-gray-500 mb-2">Itens do pedido</p>
                 <ul className="space-y-1">
-                  {(localOrder.order_items ?? []).map((item: { id: string; quantity: number; menu_item?: { name: string } }) => (
+                  {(table.current_order.order_items ?? []).map((item: { id: string; quantity: number; menu_item?: { name: string } }) => (
                     <li key={item.id} className="flex justify-between text-sm">
                       <span>{item.quantity}× {item.menu_item?.name}</span>
                     </li>
@@ -118,7 +122,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
 
               <div className="flex items-center justify-between font-bold">
                 <span>Total</span>
-                <span className="text-orange-600 text-lg">{formatCurrency(localOrder.total ?? 0)}</span>
+                <span className="text-orange-600 text-lg">{formatCurrency(table.current_order.total ?? 0)}</span>
               </div>
 
               <div className="space-y-2">
@@ -156,11 +160,11 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
         </DialogContent>
       </Dialog>
 
-      {showPayment && localOrder && (
+      {showPayment && table.current_order && (
         <PaymentModal
-          orderId={localOrder.id}
+          orderId={table.current_order.id}
           restaurantId={table.restaurant_id}
-          total={localOrder.total ?? 0}
+          total={table.current_order.total ?? 0}
           onClose={() => setShowPayment(false)}
           onPaid={() => { clearTable(); setShowPayment(false) }}
         />
@@ -170,7 +174,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
         <WaiterOrderDialog
           tableId={table.id}
           restaurantId={table.restaurant_id}
-          existingOrderId={localOrder?.id ?? null}
+          existingOrderId={table.current_order?.id ?? null}
           onClose={() => setShowWaiterOrder(false)}
           onSent={handleOrderSent}
         />
