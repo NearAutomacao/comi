@@ -1,19 +1,33 @@
 import { createClient } from '@/lib/supabase/server'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Package, TrendingDown } from 'lucide-react'
+import { Package } from 'lucide-react'
+import EstoqueFilter from './EstoqueFilter'
 
-export default async function EstoquePage() {
+function brazilToday() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+}
+
+export default async function EstoquePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
+  const { from, to } = await searchParams
+  const today = brazilToday()
+  const fromDate = from || today
+  const toDate = (to && to >= fromDate) ? to : fromDate
+
   const supabase = await createClient()
-  const today = new Date().toISOString().split('T')[0]
 
+  // Use timezone-aware ISO timestamps so Supabase compares against Brazil time (UTC-3)
   const { data: orders } = await supabase
     .from('orders')
     .select('order_items(quantity, menu_item_id, menu_item:menu_items(name, price, cost_items(*)))')
-    .gte('created_at', today)
+    .gte('created_at', `${fromDate}T00:00:00-03:00`)
+    .lte('created_at', `${toDate}T23:59:59-03:00`)
     .neq('status', 'cancelled')
 
-  // Aggregate cost per menu item
   const costMap = new Map<string, { name: string; qty: number; revenue: number; cost: number }>()
 
   for (const order of orders ?? []) {
@@ -46,17 +60,30 @@ export default async function EstoquePage() {
   const totalCost = rows.reduce((s, r) => s + r.cost, 0)
   const totalProfit = totalRevenue - totalCost
 
+  const isToday = fromDate === today && toDate === today
+  const periodLabel = isToday
+    ? 'hoje'
+    : fromDate === toDate
+    ? new Date(fromDate + 'T12:00:00').toLocaleDateString('pt-BR')
+    : `${new Date(fromDate + 'T12:00:00').toLocaleDateString('pt-BR')} – ${new Date(toDate + 'T12:00:00').toLocaleDateString('pt-BR')}`
+
   return (
     <div className="p-4 md:p-6 mt-14 md:mt-0">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+      <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
         <Package size={24} className="text-orange-500" />
-        Estoque & Custo do dia
+        Estoque & Custo
       </h1>
+
+      <EstoqueFilter defaultFrom={fromDate} defaultTo={toDate} />
+
+      <p className="text-sm text-gray-500 mb-4">
+        Movimentações do período: <span className="font-medium text-gray-700">{periodLabel}</span>
+      </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <Card className="shadow-sm">
           <CardHeader className="pb-1">
-            <CardTitle className="text-sm text-gray-500">Receita hoje</CardTitle>
+            <CardTitle className="text-sm text-gray-500">Receita do período</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">{formatCurrency(totalRevenue)}</p>
@@ -83,7 +110,7 @@ export default async function EstoquePage() {
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-gray-400 text-center py-16">Sem vendas registradas hoje</p>
+        <p className="text-gray-400 text-center py-16">Sem vendas registradas no período</p>
       ) : (
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           <table className="w-full text-sm">
