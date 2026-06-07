@@ -17,7 +17,7 @@ export default async function HomePage() {
   if (user) {
     const role = user.app_metadata?.role ?? user.user_metadata?.role
     if (role === 'manager') redirect('/admin/dashboard')
-    else redirect('/cardapio')
+    // Clientes chegam ao cardápio pelo QR code da mesa, não pelo login direto
   }
 
   return <ComiLandingPage />
