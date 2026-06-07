@@ -96,7 +96,7 @@ export function ComiLandingPage() {
       }}>
         <div style={{ padding: '0 20px', height: '100%', display: 'flex', alignItems: 'center', maxWidth: 1160, margin: '0 auto' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-            <Image src="/icomi.png" alt="comi" width={34} height={34} style={{ borderRadius: 9 }} priority />
+            <Image src="/icomi-nobg.png" alt="comi" width={34} height={34} style={{ borderRadius: 9 }} priority />
             <span style={{ fontWeight: 900, fontSize: 17, color: DARK, letterSpacing: '-0.4px', fontFamily: 'Poppins,sans-serif' }}>
               com<span style={{ color: ORANGE }}>i</span>
             </span>
@@ -301,7 +301,7 @@ export function ComiLandingPage() {
       <footer style={{ background: '#f9f9f9', borderTop: '1px solid #eee', padding: '36px 24px' }}>
         <div style={{ maxWidth: 1160, margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Image src="/icomi.png" alt="comi" width={28} height={28} style={{ borderRadius: 7, opacity: 0.8 }} />
+            <Image src="/icomi-nobg.png" alt="comi" width={28} height={28} style={{ borderRadius: 7, opacity: 0.8 }} />
             <div>
               <p style={{ fontSize: 12, fontWeight: 700, color: '#555', fontFamily: 'Poppins,sans-serif' }}>comi</p>
               <p style={{ fontSize: 11, color: '#999', fontFamily: 'Montserrat,sans-serif', fontWeight: 300 }}>AWP Labs — CNPJ: 66.986.676/0001-04</p>
