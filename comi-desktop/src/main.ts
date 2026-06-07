@@ -1,14 +1,14 @@
-import { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, dialog, utilityProcess } from 'electron'
+import type { UtilityProcess } from 'electron'
 import log from 'electron-log'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as http from 'http'
-import { spawn, ChildProcess } from 'child_process'
 import { setupUpdater } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 
 log.transports.file.level = 'info'
-// Desabilita console em produção — stdout não existe quando app é instalado (EPIPE)
+// Desabilita console em produção — stdout não existe em app instalado (causa EPIPE)
 log.transports.console.level = process.env.NODE_ENV === 'development' ? 'debug' : false
 log.info('COMI Desktop iniciando...')
 
@@ -17,7 +17,7 @@ const APP_URL = `http://localhost:${PORT}`
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 
 let mainWindow: BrowserWindow | null = null
-let nextServer: ChildProcess | null = null
+let nextServerProcess: UtilityProcess | null = null
 let tray: Tray | null = null
 
 // ──────────────────────────────────────────
@@ -45,23 +45,23 @@ function saveConfig(config: AppConfig): void {
 }
 
 // ──────────────────────────────────────────
-// Servidor Next.js (standalone)
+// Servidor Next.js (standalone via utilityProcess)
+// utilityProcess cria um processo Node.js puro — não Electron completo
 // ──────────────────────────────────────────
 function startNextServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (isDev) {
-      log.info('[server] Modo dev — Next.js já deve estar rodando')
+      log.info('[server] Modo dev — Next.js já deve estar rodando na porta', PORT)
       resolve()
       return
     }
 
-    // standalone output é extraído diretamente em resources/app/
     const appDir = path.join(process.resourcesPath, 'app')
     const serverScript = path.join(appDir, 'server.js')
 
-    log.info('[server] Iniciando Next.js:', serverScript)
+    log.info('[server] Iniciando via utilityProcess:', serverScript)
 
-    nextServer = spawn(process.execPath, [serverScript], {
+    nextServerProcess = utilityProcess.fork(serverScript, [], {
       env: {
         ...process.env,
         PORT: String(PORT),
@@ -69,17 +69,21 @@ function startNextServer(): Promise<void> {
         NODE_ENV: 'production',
       },
       cwd: appDir,
+      stdio: 'pipe',
     })
 
-    nextServer.stdout?.on('data', data => log.info('[next]', String(data).trim()))
-    nextServer.stderr?.on('data', data => log.warn('[next]', String(data).trim()))
+    nextServerProcess.stdout?.on('data', (data: Buffer) =>
+      log.info('[next]', data.toString().trim())
+    )
+    nextServerProcess.stderr?.on('data', (data: Buffer) =>
+      log.warn('[next]', data.toString().trim())
+    )
 
-    nextServer.on('error', err => {
-      log.error('[server] Erro ao iniciar Next.js:', err)
-      reject(err)
+    nextServerProcess.on('exit', (code: number) => {
+      log.warn('[server] utilityProcess encerrou com código:', code)
     })
 
-    waitForServer(APP_URL, 30).then(resolve).catch(reject)
+    waitForServer(APP_URL, 40).then(resolve).catch(reject)
   })
 }
 
@@ -96,22 +100,6 @@ async function waitForServer(url: string, retries: number): Promise<void> {
     }
   }
   throw new Error('Servidor Next.js não iniciou a tempo')
-}
-
-// ──────────────────────────────────────────
-// Verificação de licença
-// ──────────────────────────────────────────
-async function checkLicense(restaurantId: string): Promise<{ valid: boolean; reason?: string }> {
-  return new Promise(resolve => {
-    http.get(`${APP_URL}/api/license?restaurantId=${restaurantId}`, res => {
-      let data = ''
-      res.on('data', chunk => { data += chunk })
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)) }
-        catch { resolve({ valid: true }) }
-      })
-    }).on('error', () => resolve({ valid: true, reason: 'offline_grace' }))
-  })
 }
 
 // ──────────────────────────────────────────
@@ -171,21 +159,15 @@ function createTray() {
 ipcMain.handle('app-version', () => app.getVersion())
 ipcMain.handle('open-external', (_, url: string) => shell.openExternal(url))
 
-// Chamado pelo Next.js quando o gerente faz login no admin
 ipcMain.handle('set-restaurant-config', async (_, { restaurantId, printerConfig }: {
   restaurantId: string
   printerConfig?: { kitchenHost: string; kitchenPort: number; barHost: string; barPort: number }
 }) => {
   log.info('[ipc] set-restaurant-config:', restaurantId)
-
   const config = loadConfig()
   config.restaurantId = restaurantId
   saveConfig(config)
-
-  if (printerConfig) {
-    updatePrinterConfig(printerConfig)
-  }
-
+  if (printerConfig) updatePrinterConfig(printerConfig)
   await startPrintAgent(restaurantId)
   return { ok: true }
 })
@@ -199,10 +181,9 @@ app.whenReady().then(async () => {
     createWindow()
     createTray()
 
-    // Retoma o agente de impressão se restaurante já foi configurado
     const config = loadConfig()
     if (config.restaurantId) {
-      log.info('[startup] Retomando print agent para restaurante', config.restaurantId)
+      log.info('[startup] Retomando print agent para', config.restaurantId)
       startPrintAgent(config.restaurantId).catch(err =>
         log.error('[startup] Erro ao iniciar print agent:', err)
       )
@@ -224,8 +205,8 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   stopPrintAgent()
-  if (nextServer) {
+  if (nextServerProcess) {
     log.info('[server] Encerrando Next.js...')
-    nextServer.kill()
+    nextServerProcess.kill()
   }
 })
