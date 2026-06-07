@@ -5,6 +5,7 @@ import log from 'electron-log'
 import * as path from 'path'
 import * as fs from 'fs'
 import * as http from 'http'
+import * as os from 'os'
 import { setupUpdater } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET } from './env'
@@ -29,6 +30,16 @@ let tray: Tray | null = null
 // ──────────────────────────────────────────
 interface AppConfig {
   restaurantId?: string
+}
+
+function getLocalIP(): string {
+  const ifaces = os.networkInterfaces()
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name] ?? []) {
+      if (iface.family === 'IPv4' && !iface.internal) return iface.address
+    }
+  }
+  return '127.0.0.1'
 }
 
 function getConfigPath(): string {
@@ -69,8 +80,9 @@ function startNextServer(): Promise<void> {
       env: {
         ...process.env,
         PORT: String(PORT),
-        HOSTNAME: '127.0.0.1',
+        HOSTNAME: '0.0.0.0',
         NODE_ENV: 'production',
+        LOCAL_IP: getLocalIP(),
         // Vars de runtime necessárias para o servidor Next.js standalone
         NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,

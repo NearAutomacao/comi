@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard, MapPin, UtensilsCrossed, ClipboardList,
-  Calendar, Package, Settings, LogOut,
+  Calendar, Package, Settings, LogOut, QrCode,
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import { createClient } from '@/lib/supabase/client'
@@ -25,6 +25,7 @@ const baseNav = [
   { href: '/admin/cardapio',      label: 'Cardápio',       icon: UtensilsCrossed },
   { href: '/admin/reservas',      label: 'Reservas',       icon: Calendar },
   { href: '/admin/estoque',       label: 'Estoque/Custo',  icon: Package },
+  { href: '/admin/qrcode',        label: 'QR Code',        icon: QrCode },
   { href: '/admin/configuracoes', label: 'Configurações',  icon: Settings },
 ]
 
