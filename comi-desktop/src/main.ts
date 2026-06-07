@@ -218,10 +218,6 @@ ipcMain.handle('set-restaurant-config', async (_, { restaurantId, printerConfig 
 })
 
 // ──────────────────────────────────────────
-// Remove menu padrão do Electron (File, Edit, View…)
-Menu.setApplicationMenu(null)
-
-// ──────────────────────────────────────────
 // Single instance lock — impede duas janelas no mesmo PC
 // ──────────────────────────────────────────
 const gotLock = app.requestSingleInstanceLock()
@@ -235,6 +231,9 @@ app.on('second-instance', () => { showWindow() })
 // Lifecycle
 // ──────────────────────────────────────────
 app.whenReady().then(async () => {
+  // Remove menu padrão (File, Edit, View…) — deve ser chamado após app ready
+  Menu.setApplicationMenu(null)
+
   try {
     await startNextServer()
     createWindow()
