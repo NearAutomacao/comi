@@ -179,7 +179,10 @@ function createTray() {
   const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico')
   tray = new Tray(nativeImage.createFromPath(iconPath))
 
+  const version = app.getVersion()
   const menu = Menu.buildFromTemplate([
+    { label: `COMI v${version}`, enabled: false },
+    { type: 'separator' },
     { label: 'Abrir COMI', click: () => showWindow() },
     { type: 'separator' },
     {
@@ -193,7 +196,7 @@ function createTray() {
     { label: 'Sair', click: () => { isQuitting = true; app.quit() } },
   ])
 
-  tray.setToolTip('COMI — Sistema de Gestão')
+  tray.setToolTip(`COMI v${version} — Sistema de Gestão`)
   tray.setContextMenu(menu)
   tray.on('double-click', () => showWindow())
 }
