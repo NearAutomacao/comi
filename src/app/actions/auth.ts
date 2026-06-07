@@ -98,7 +98,7 @@ export async function signIn(formData: FormData) {
   const supabase = await createClient()
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-  if (error) return { error: 'Email ou senha incorretos' }
+  if (error) return { error: error.message }
 
   // Usa o mesmo client (já tem a sessão) para checar o perfil
   // Evita depender de SUPABASE_SERVICE_ROLE_KEY, que não está disponível no Electron
