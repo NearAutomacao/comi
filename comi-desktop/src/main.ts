@@ -117,7 +117,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'COMI',
-    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -142,7 +142,7 @@ function createWindow() {
 // Bandeja do sistema
 // ──────────────────────────────────────────
 function createTray() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'tray.ico')
+  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png')
   tray = new Tray(nativeImage.createFromPath(iconPath))
 
   const menu = Menu.buildFromTemplate([
@@ -176,6 +176,10 @@ ipcMain.handle('set-restaurant-config', async (_, { restaurantId, printerConfig 
   await startPrintAgent(restaurantId)
   return { ok: true }
 })
+
+// ──────────────────────────────────────────
+// Remove menu padrão do Electron (File, Edit, View…)
+Menu.setApplicationMenu(null)
 
 // ──────────────────────────────────────────
 // Single instance lock — impede duas janelas no mesmo PC
