@@ -8,15 +8,13 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   if (!user) redirect('/login')
 
-  const role = user.app_metadata?.role ?? user.user_metadata?.role
-  if (role !== 'manager') redirect('/cardapio')
+  // Busca perfil e restaurante juntos — comi.profiles é a fonte de verdade do role
+  const [{ data: profile }, { data: restaurant }] = await Promise.all([
+    supabase.from('profiles').select('role').eq('id', user.id).single(),
+    supabase.from('restaurants').select('id, name').eq('owner_id', user.id).single(),
+  ])
 
-  // Busca nome do restaurante (fallback para nome do usuário)
-  const { data: restaurant } = await supabase
-    .from('restaurants')
-    .select('id, name')
-    .eq('owner_id', user.id)
-    .single()
+  if (profile?.role !== 'manager') redirect('/login')
 
   const managerName = user.user_metadata?.name ?? user.email ?? 'Gerente'
   const restaurantName = restaurant?.name ?? 'Meu Restaurante'
