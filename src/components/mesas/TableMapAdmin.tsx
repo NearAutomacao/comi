@@ -14,9 +14,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 interface Props {
   restaurantId: string
   initialTables: Table[]
+  localIP?: string
 }
 
-export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
+export default function TableMapAdmin({ restaurantId, initialTables, localIP }: Props) {
   const [tables, setTables] = useState<Table[]>(initialTables)
   const [selected, setSelected] = useState<Table | null>(null)
   const [qrTable, setQrTable] = useState<Table | null>(null)
@@ -125,10 +126,10 @@ export default function TableMapAdmin({ restaurantId, initialTables }: Props) {
     toast.success('Mesa removida')
   }
 
-  // Usa a origem real do browser para o QR code funcionar em qualquer ambiente
-  const appUrl = typeof window !== 'undefined'
-    ? window.location.origin
-    : (process.env.NEXT_PUBLIC_APP_URL ?? 'https://comi.awplabs.com.br')
+  // No Electron (rede local), usa o IP da máquina para o QR code funcionar no celular
+  const appUrl = localIP && localIP !== '127.0.0.1'
+    ? `http://${localIP}:3100`
+    : (typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? ''))
 
   return (
     <div>

@@ -27,10 +27,12 @@ export default async function MesasAdminPage() {
     current_order: Array.isArray(t.current_order) ? (t.current_order[0] ?? null) : null,
   }))
 
+  const localIP = process.env.LOCAL_IP
+
   return (
     <div className="p-4 md:p-6 mt-14 md:mt-0">
       <h1 className="text-2xl font-bold mb-4">Mapa de mesas</h1>
-      <TableMapAdmin restaurantId={restaurantId} initialTables={tablesWithOrder} />
+      <TableMapAdmin restaurantId={restaurantId} initialTables={tablesWithOrder} localIP={localIP} />
     </div>
   )
 }
