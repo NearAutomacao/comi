@@ -49,7 +49,7 @@ function LoginForm() {
           <CardTitle className="text-2xl font-black" style={{ fontFamily: 'Poppins, sans-serif' }}>
             com<span className="text-orange-500">i</span>
           </CardTitle>
-          <CardDescription>Acesse seu cardápio e reservas</CardDescription>
+          <CardDescription>Acesse o painel do seu restaurante</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -75,11 +75,8 @@ function LoginForm() {
           </form>
           <p className="text-center text-sm text-gray-600 mt-4">
             Não tem conta?{' '}
-            <Link
-              href={next ? `/cadastro?next=${encodeURIComponent(next)}` : '/cadastro'}
-              className="text-orange-600 font-medium hover:underline"
-            >
-              Cadastre-se
+            <Link href="/cadastro-restaurante" className="text-orange-600 font-medium hover:underline">
+              Cadastrar restaurante
             </Link>
           </p>
         </CardContent>
