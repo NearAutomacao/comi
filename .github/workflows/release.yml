@@ -51,7 +51,7 @@ jobs:
 
       # 6. Instala deps do Electron
       - name: Install Electron dependencies
-        run: npm ci
+        run: npm install
         working-directory: comi-desktop
 
       # 7. Compila TypeScript + empacota + publica no GitHub Releases
