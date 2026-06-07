@@ -10,7 +10,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 
 export default function CarrinhoPage() {
-  const { items, updateQuantity, removeItem, clearCart, total, tableId, tableNumber } = useCartStore()
+  const { items, updateQuantity, removeItem, clearCart, total, tableId, tableNumber, sessionId } = useCartStore()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
@@ -30,6 +30,7 @@ export default function CarrinhoPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tableId,
+        sessionId: sessionId ?? undefined,
         items: items.map(i => ({
           menuItemId: i.menu_item.id,
           quantity: i.quantity,

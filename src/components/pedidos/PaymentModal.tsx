@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { formatCurrency } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { CreditCard, Smartphone, Users } from 'lucide-react'
+import { Banknote, CreditCard, Smartphone, Users } from 'lucide-react'
 import type { PaymentMethod } from '@/types'
 
 interface PersonPayment {
@@ -81,12 +81,14 @@ export default function PaymentModal({ orderId, restaurantId, total, onClose, on
     pix: <Smartphone size={14} />,
     credit_card: <CreditCard size={14} />,
     debit_card: <CreditCard size={14} />,
+    cash: <Banknote size={14} />,
   }
 
   const methodLabels: Record<PaymentMethod, string> = {
     pix: 'PIX',
     credit_card: 'Crédito',
     debit_card: 'Débito',
+    cash: 'Dinheiro',
   }
 
   return (

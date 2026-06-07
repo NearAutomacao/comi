@@ -59,9 +59,9 @@ export default function TableSelection({ table, blockedByOther }: Props) {
       return
     }
 
-    const { tableNumber, restaurantId } = await res.json()
+    const { tableNumber, restaurantId, sessionId } = await res.json()
     setTable(table.id, tableNumber)
-    setGuest(name.trim(), phone.trim(), restaurantId)
+    setGuest(name.trim(), phone.trim(), restaurantId, sessionId ?? '')
     toast.success(`Mesa ${tableNumber} pronta! Bom apetite.`)
     router.push('/cardapio')
   }

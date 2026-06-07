@@ -7,6 +7,7 @@ interface CartStore {
   tableId: string | null
   tableNumber: number | null
   restaurantId: string | null
+  sessionId: string | null
   guestName: string | null
   guestPhone: string | null
   addItem: (item: MenuItem, notes?: string) => void
@@ -15,7 +16,7 @@ interface CartStore {
   clearCart: () => void
   clearSession: () => void
   setTable: (tableId: string, tableNumber: number) => void
-  setGuest: (name: string, phone: string, restaurantId: string) => void
+  setGuest: (name: string, phone: string, restaurantId: string, sessionId: string) => void
   total: () => number
   itemCount: () => number
 }
@@ -27,6 +28,7 @@ export const useCartStore = create<CartStore>()(
       tableId: null,
       tableNumber: null,
       restaurantId: null,
+      sessionId: null,
       guestName: null,
       guestPhone: null,
 
@@ -63,12 +65,20 @@ export const useCartStore = create<CartStore>()(
       },
 
       clearCart: () => set({ items: [] }),
-      clearSession: () => set({ items: [], tableId: null, tableNumber: null, restaurantId: null, guestName: null, guestPhone: null }),
+      clearSession: () => set({
+        items: [],
+        tableId: null,
+        tableNumber: null,
+        restaurantId: null,
+        sessionId: null,
+        guestName: null,
+        guestPhone: null,
+      }),
       setTable: (tableId, tableNumber) => set({ tableId, tableNumber }),
-      setGuest: (guestName, guestPhone, restaurantId) => set({ guestName, guestPhone, restaurantId }),
+      setGuest: (guestName, guestPhone, restaurantId, sessionId) =>
+        set({ guestName, guestPhone, restaurantId, sessionId }),
 
       total: () => get().items.reduce((sum, i) => sum + i.menu_item.price * i.quantity, 0),
-
       itemCount: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
     }),
     { name: 'comi-cart' }

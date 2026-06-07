@@ -30,6 +30,7 @@ export interface MenuCategory {
   name: string
   slug: string
   display_order: number
+  printer: 'kitchen' | 'bar' | null
   created_at: string
 }
 
@@ -138,16 +139,19 @@ export interface Order {
   restaurant_id: string
   table_id: string
   customer_id: string | null
+  session_id: string | null
+  code: number | null
   status: OrderStatus
   total: number
   payment_status: PaymentStatus
   created_at: string
   table?: Table
   customer?: Profile
+  session?: TableSession
   order_items?: OrderItem[]
 }
 
-export type PaymentMethod = 'credit_card' | 'debit_card' | 'pix'
+export type PaymentMethod = 'credit_card' | 'debit_card' | 'pix' | 'cash'
 
 export interface Payment {
   id: string
@@ -168,6 +172,41 @@ export interface PaymentPerson {
   method: PaymentMethod
 }
 
+export interface PrintJobItem {
+  menu_item_id: string
+  name: string
+  quantity: number
+  unit_price: number
+  notes: string | null
+}
+
+export interface PrintJob {
+  id: string
+  restaurant_id: string
+  order_id: string
+  printer: 'kitchen' | 'bar'
+  items: PrintJobItem[]
+  table_number: number | null
+  guest_name: string | null
+  order_code: number | null
+  created_at: string
+  printed_at: string | null
+}
+
+export type SubscriptionStatus = 'trial' | 'active' | 'suspended' | 'cancelled'
+export type SubscriptionPlan = 'trial' | 'basic' | 'pro'
+
+export interface Subscription {
+  id: string
+  restaurant_id: string
+  plan: SubscriptionPlan
+  status: SubscriptionStatus
+  starts_at: string
+  expires_at: string | null
+  mp_preapproval_id: string | null
+  created_at: string
+}
+
 export interface TableColor {
   bg: string
   border: string
@@ -182,7 +221,6 @@ export function getTableColor(table: Table): TableColor {
   if (table.status === 'reserved') {
     return { bg: 'bg-blue-200', border: 'border-blue-500', text: 'text-blue-800', label: 'Reservada' }
   }
-  // occupied — amarela assim que alguém senta, mesmo sem pedido ainda
   const total = table.current_order?.total ?? 0
   if (total === 0) {
     return { bg: 'bg-yellow-200', border: 'border-yellow-500', text: 'text-yellow-800', label: 'Ocupada' }
