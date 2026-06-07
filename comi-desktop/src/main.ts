@@ -128,8 +128,8 @@ function createWindow() {
     },
   })
 
-  // Desktop app sempre entra no painel admin (redireciona para login se não autenticado)
-  mainWindow.loadURL(APP_URL + '/admin')
+  // Desktop app entra direto no dashboard (redireciona para login se não autenticado)
+  mainWindow.loadURL(APP_URL + '/admin/dashboard')
 
   // X fecha a janela mas mantém o app na bandeja — não destrói mainWindow
   mainWindow.on('close', (e) => {
