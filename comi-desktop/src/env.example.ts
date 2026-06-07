@@ -4,3 +4,4 @@
 
 export const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co'
 export const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY'
+export const MESA_SESSION_SECRET = 'YOUR_MESA_SESSION_SECRET'

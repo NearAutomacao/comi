@@ -6,6 +6,7 @@ import * as fs from 'fs'
 import * as http from 'http'
 import { setupUpdater } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
+import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET } from './env'
 
 log.transports.file.level = 'info'
 // Desabilita console em produção — stdout não existe em app instalado (causa EPIPE)
@@ -67,6 +68,10 @@ function startNextServer(): Promise<void> {
         PORT: String(PORT),
         HOSTNAME: '127.0.0.1',
         NODE_ENV: 'production',
+        // Vars de runtime necessárias para o servidor Next.js standalone
+        NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
+        MESA_SESSION_SECRET: MESA_SESSION_SECRET,
       },
       cwd: appDir,
       stdio: 'pipe',
