@@ -1,0 +1,71 @@
+name: Build & Release Desktop
+
+# Dispara ao criar uma tag de versão: git tag v1.2.3 && git push origin v1.2.3
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Permissão para criar releases no repositório
+permissions:
+  contents: write
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. Instala deps do Next.js
+      - name: Install Next.js dependencies
+        run: npm ci
+
+      # 4. Build Next.js em modo standalone (para empacotar no Electron)
+      - name: Build Next.js (standalone)
+        run: npm run build
+        env:
+          BUILD_TARGET: desktop
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          MESA_SESSION_SECRET: ${{ secrets.MESA_SESSION_SECRET }}
+          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+
+      # 5. Gera src/env.ts com as credenciais embutidas no binário Electron
+      - name: Generate Electron env constants
+        shell: bash
+        run: |
+          cat > comi-desktop/src/env.ts << 'EOF'
+          export const SUPABASE_URL = '${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}'
+          export const SUPABASE_ANON_KEY = '${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}'
+          EOF
+
+      # 6. Instala deps do Electron
+      - name: Install Electron dependencies
+        run: npm ci
+        working-directory: comi-desktop
+
+      # 7. Compila TypeScript + empacota + publica no GitHub Releases
+      - name: Build & Publish Electron installer
+        run: npm run dist
+        working-directory: comi-desktop
+        env:
+          # GITHUB_TOKEN tem permissão write (configurado em permissions acima)
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 8. Faz upload dos artefatos como fallback (caso o electron-builder já publique diretamente)
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: COMI-Windows-Installer
+          path: comi-desktop/dist/*.exe
+          if-no-files-found: ignore

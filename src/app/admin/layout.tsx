@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import AdminSidebar from '@/components/shared/AdminSidebar'
 import UpdateNotifier from '@/components/shared/UpdateNotifier'
+import ElectronBridge from '@/components/shared/ElectronBridge'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -26,6 +27,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AdminSidebar managerName={managerName} restaurantName={restaurantName} restaurantId={restaurantId} />
       <main className="flex-1 overflow-auto">{children}</main>
       <UpdateNotifier />
+      <ElectronBridge restaurantId={restaurantId} />
     </div>
   )
 }

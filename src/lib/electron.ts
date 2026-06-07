@@ -1,11 +1,13 @@
-// Utilitários para comunicação com o Electron (só ativo quando rodando no desktop)
-
 declare global {
   interface Window {
     electronAPI?: {
       getVersion: () => Promise<string>
       openExternal: (url: string) => Promise<void>
       checkForUpdates: () => Promise<void>
+      setRestaurantConfig: (payload: {
+        restaurantId: string
+        printerConfig?: { kitchenHost: string; kitchenPort: number; barHost: string; barPort: number }
+      }) => Promise<{ ok: boolean }>
       onUpdateAvailable: (cb: (version: string) => void) => void
       onUpdateProgress: (cb: (percent: number) => void) => void
       onTriggerUpdateCheck: (cb: () => void) => void

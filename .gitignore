@@ -40,3 +40,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env.local
+
+# Electron — credenciais embutidas (geradas pelo CI a partir dos secrets)
+comi-desktop/src/env.ts
+comi-desktop/dist/
+comi-desktop/node_modules/

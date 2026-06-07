@@ -21,6 +21,10 @@ export interface Restaurant {
   mp_public_key: string | null
   mp_refresh_token: string | null
   mp_user_id: string | null
+  printer_kitchen_host: string | null
+  printer_kitchen_port: number | null
+  printer_bar_host: string | null
+  printer_bar_port: number | null
   created_at: string
 }
 

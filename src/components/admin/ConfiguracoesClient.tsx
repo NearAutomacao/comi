@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getDayName } from '@/lib/utils'
 import { toast } from 'sonner'
-import { CreditCard, Clock, CalendarX, Settings, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
+import { CreditCard, Clock, CalendarX, Settings, CheckCircle, AlertCircle, ExternalLink, Printer } from 'lucide-react'
 import type { WorkingHours, ClosedDate, Restaurant } from '@/types'
 
 interface Props {
@@ -28,6 +28,10 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
   const [closedDates, setClosedDates] = useState(initialClosedDates)
   const [newDate, setNewDate] = useState('')
   const [newDateReason, setNewDateReason] = useState('')
+  const [kitchenHost, setKitchenHost] = useState(restaurant?.printer_kitchen_host ?? '')
+  const [kitchenPort, setKitchenPort] = useState(String(restaurant?.printer_kitchen_port ?? 9100))
+  const [barHost, setBarHost] = useState(restaurant?.printer_bar_host ?? '')
+  const [barPort, setBarPort] = useState(String(restaurant?.printer_bar_port ?? 9100))
   const supabase = createClient()
 
   const mpConnected = !!restaurant?.mp_access_token
@@ -60,6 +64,17 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
   async function removeClosedDate(id: string) {
     await supabase.from('closed_dates').delete().eq('id', id)
     setClosedDates(prev => prev.filter(d => d.id !== id))
+  }
+
+  async function savePrinters() {
+    if (!restaurant?.id) return
+    await supabase.from('restaurants').update({
+      printer_kitchen_host: kitchenHost || null,
+      printer_kitchen_port: parseInt(kitchenPort) || 9100,
+      printer_bar_host: barHost || null,
+      printer_bar_port: parseInt(barPort) || 9100,
+    }).eq('id', restaurant.id)
+    toast.success('Impressoras salvas')
   }
 
   async function disconnectMP() {
@@ -203,6 +218,64 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Impressoras */}
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Printer size={18} className="text-purple-500" /> Impressoras térmicas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <p className="text-sm text-gray-500">
+            Configure o IP das impressoras na rede local do restaurante. Porta padrão ESC/POS: <strong>9100</strong>.
+          </p>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 font-medium">Cozinha</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="192.168.1.100"
+                value={kitchenHost}
+                onChange={e => setKitchenHost(e.target.value)}
+                className="flex-1"
+              />
+              <Input
+                placeholder="9100"
+                value={kitchenPort}
+                onChange={e => setKitchenPort(e.target.value)}
+                className="w-24"
+                type="number"
+              />
+            </div>
+            <p className="text-xs text-gray-400">Itens de comida são enviados para esta impressora.</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5 font-medium">Bar</Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="192.168.1.101"
+                value={barHost}
+                onChange={e => setBarHost(e.target.value)}
+                className="flex-1"
+              />
+              <Input
+                placeholder="9100"
+                value={barPort}
+                onChange={e => setBarPort(e.target.value)}
+                className="w-24"
+                type="number"
+              />
+            </div>
+            <p className="text-xs text-gray-400">Bebidas são enviadas para esta impressora.</p>
+          </div>
+
+          <Button onClick={savePrinters} className="bg-purple-500 hover:bg-purple-600 text-white">
+            Salvar impressoras
+          </Button>
         </CardContent>
       </Card>
     </div>

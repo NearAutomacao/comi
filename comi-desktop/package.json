@@ -6,9 +6,8 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:next\" \"wait-on http://localhost:3100 && electron .\"",
     "dev:next": "cross-env PORT=3100 node ../node_modules/.bin/next dev ..",
-    "build": "npm run build:next && tsc && electron-builder",
-    "build:next": "cross-env PORT=3100 node ../node_modules/.bin/next build ..",
-    "dist": "electron-builder --win --x64"
+    "build:ts": "tsc",
+    "dist": "tsc && electron-builder --win --x64"
   },
   "build": {
     "appId": "br.com.nearautomacao.comi",
@@ -27,17 +26,29 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "nearautomacao",
-      "repo": "comi-releases"
+      "owner": "NearAutomacao",
+      "repo": "comi"
     },
     "extraResources": [
-      { "from": "../.next", "to": "app/.next", "filter": ["**/*"] },
-      { "from": "../public", "to": "app/public", "filter": ["**/*"] },
-      { "from": "../package.json", "to": "app/package.json" },
-      { "from": "../node_modules", "to": "app/node_modules", "filter": ["**/*"] }
+      {
+        "from": "../.next/standalone",
+        "to": "app",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../.next/static",
+        "to": "app/.next/static",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "../public",
+        "to": "app/public",
+        "filter": ["**/*"]
+      }
     ]
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
     "electron-updater": "^6.3.9",
     "electron-log": "^5.2.4"
   },

@@ -1,9 +1,11 @@
-import { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, dialog } from 'electron'
 import log from 'electron-log'
 import * as path from 'path'
+import * as fs from 'fs'
 import * as http from 'http'
 import { spawn, ChildProcess } from 'child_process'
 import { setupUpdater } from './updater'
+import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 
 log.transports.file.level = 'info'
 log.info('COMI Desktop iniciando...')
@@ -17,7 +19,31 @@ let nextServer: ChildProcess | null = null
 let tray: Tray | null = null
 
 // ──────────────────────────────────────────
-// Inicia o servidor Next.js em modo standalone
+// Config persistida em userData
+// ──────────────────────────────────────────
+interface AppConfig {
+  restaurantId?: string
+}
+
+function getConfigPath(): string {
+  return path.join(app.getPath('userData'), 'config.json')
+}
+
+function loadConfig(): AppConfig {
+  try {
+    const raw = fs.readFileSync(getConfigPath(), 'utf8')
+    return JSON.parse(raw) as AppConfig
+  } catch {
+    return {}
+  }
+}
+
+function saveConfig(config: AppConfig): void {
+  fs.writeFileSync(getConfigPath(), JSON.stringify(config, null, 2), 'utf8')
+}
+
+// ──────────────────────────────────────────
+// Servidor Next.js (standalone)
 // ──────────────────────────────────────────
 function startNextServer(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -27,8 +53,9 @@ function startNextServer(): Promise<void> {
       return
     }
 
+    // standalone output é extraído diretamente em resources/app/
     const appDir = path.join(process.resourcesPath, 'app')
-    const serverScript = path.join(appDir, '.next', 'standalone', 'server.js')
+    const serverScript = path.join(appDir, 'server.js')
 
     log.info('[server] Iniciando Next.js:', serverScript)
 
@@ -36,8 +63,8 @@ function startNextServer(): Promise<void> {
       env: {
         ...process.env,
         PORT: String(PORT),
+        HOSTNAME: '127.0.0.1',
         NODE_ENV: 'production',
-        // Variáveis de ambiente do .env (embutidas no build)
       },
       cwd: appDir,
     })
@@ -50,7 +77,6 @@ function startNextServer(): Promise<void> {
       reject(err)
     })
 
-    // Aguarda servidor responder
     waitForServer(APP_URL, 30).then(resolve).catch(reject)
   })
 }
@@ -71,7 +97,7 @@ async function waitForServer(url: string, retries: number): Promise<void> {
 }
 
 // ──────────────────────────────────────────
-// Verifica licença antes de abrir a janela principal
+// Verificação de licença
 // ──────────────────────────────────────────
 async function checkLicense(restaurantId: string): Promise<{ valid: boolean; reason?: string }> {
   return new Promise(resolve => {
@@ -80,17 +106,14 @@ async function checkLicense(restaurantId: string): Promise<{ valid: boolean; rea
       res.on('data', chunk => { data += chunk })
       res.on('end', () => {
         try { resolve(JSON.parse(data)) }
-        catch { resolve({ valid: true }) } // Se falhar na verificação, deixa passar (modo offline)
+        catch { resolve({ valid: true }) }
       })
-    }).on('error', () => {
-      // Sem internet: usa cache local ou concede acesso por até 3 dias
-      resolve({ valid: true, reason: 'offline_grace' })
-    })
+    }).on('error', () => resolve({ valid: true, reason: 'offline_grace' }))
   })
 }
 
 // ──────────────────────────────────────────
-// Cria a janela principal
+// Janela principal
 // ──────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -108,23 +131,20 @@ function createWindow() {
   })
 
   mainWindow.loadURL(APP_URL)
-
   mainWindow.on('closed', () => { mainWindow = null })
 
-  // Abre links externos no browser padrão
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith(APP_URL)) shell.openExternal(url)
     return { action: 'deny' }
   })
 
-  // Configura auto-update depois que a janela estiver pronta
   mainWindow.webContents.once('did-finish-load', () => {
     if (!isDev) setupUpdater(mainWindow!)
   })
 }
 
 // ──────────────────────────────────────────
-// Ícone na bandeja do sistema
+// Bandeja do sistema
 // ──────────────────────────────────────────
 function createTray() {
   const iconPath = path.join(__dirname, '..', 'assets', 'tray.ico')
@@ -133,10 +153,7 @@ function createTray() {
   const menu = Menu.buildFromTemplate([
     { label: 'Abrir COMI', click: () => mainWindow?.show() },
     { type: 'separator' },
-    {
-      label: 'Verificar atualizações',
-      click: () => mainWindow?.webContents.send('trigger-update-check'),
-    },
+    { label: 'Verificar atualizações', click: () => mainWindow?.webContents.send('trigger-update-check') },
     { type: 'separator' },
     { label: 'Sair', click: () => app.quit() },
   ])
@@ -147,10 +164,29 @@ function createTray() {
 }
 
 // ──────────────────────────────────────────
-// IPC: comunicação com a janela
+// IPC
 // ──────────────────────────────────────────
 ipcMain.handle('app-version', () => app.getVersion())
 ipcMain.handle('open-external', (_, url: string) => shell.openExternal(url))
+
+// Chamado pelo Next.js quando o gerente faz login no admin
+ipcMain.handle('set-restaurant-config', async (_, { restaurantId, printerConfig }: {
+  restaurantId: string
+  printerConfig?: { kitchenHost: string; kitchenPort: number; barHost: string; barPort: number }
+}) => {
+  log.info('[ipc] set-restaurant-config:', restaurantId)
+
+  const config = loadConfig()
+  config.restaurantId = restaurantId
+  saveConfig(config)
+
+  if (printerConfig) {
+    updatePrinterConfig(printerConfig)
+  }
+
+  await startPrintAgent(restaurantId)
+  return { ok: true }
+})
 
 // ──────────────────────────────────────────
 // Lifecycle
@@ -160,17 +196,24 @@ app.whenReady().then(async () => {
     await startNextServer()
     createWindow()
     createTray()
+
+    // Retoma o agente de impressão se restaurante já foi configurado
+    const config = loadConfig()
+    if (config.restaurantId) {
+      log.info('[startup] Retomando print agent para restaurante', config.restaurantId)
+      startPrintAgent(config.restaurantId).catch(err =>
+        log.error('[startup] Erro ao iniciar print agent:', err)
+      )
+    }
   } catch (err) {
     log.error('Falha ao iniciar:', err)
+    dialog.showErrorBox('Erro ao iniciar COMI', String(err))
     app.quit()
   }
 })
 
 app.on('window-all-closed', () => {
-  // No Windows, manter rodando na bandeja quando fechar a janela
-  if (process.platform !== 'darwin') {
-    // Não chama app.quit() — continua na bandeja
-  }
+  // Windows: mantém na bandeja ao fechar a janela
 })
 
 app.on('activate', () => {
@@ -178,6 +221,7 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
+  stopPrintAgent()
   if (nextServer) {
     log.info('[server] Encerrando Next.js...')
     nextServer.kill()
