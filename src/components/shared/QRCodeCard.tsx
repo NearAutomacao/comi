@@ -1,6 +1,6 @@
 'use client'
 
-import { QRCodeSVG } from 'react-qr-code'
+import QRCode from 'react-qr-code'
 import { useState } from 'react'
 import { Copy, Check, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -46,7 +46,7 @@ export default function QRCodeCard({ url, label, description, highlight }: Props
       }`}>{label}</span>
 
       <div id={`qr-${btoa(url).slice(0, 8)}`} className="bg-white p-3 rounded-lg">
-        <QRCodeSVG value={url} size={200} />
+        <QRCode value={url} size={200} />
       </div>
 
       <p className="text-xs text-gray-500 text-center break-all">{description}</p>
