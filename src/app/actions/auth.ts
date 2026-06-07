@@ -100,11 +100,20 @@ export async function signIn(formData: FormData) {
 
   if (error) return { error: 'Email ou senha incorretos' }
 
-  // app_metadata é admin-controlled, user_metadata é fallback
-  const role = (data.user.app_metadata?.role as string)
-    ?? (data.user.user_metadata?.role as string)
-    ?? 'customer'
-  return { role }
+  // Garante que o usuário pertence ao COMI (não ao gas-delivery ou outro sistema)
+  const admin = await createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('role')
+    .eq('id', data.user.id)
+    .single()
+
+  if (!profile) {
+    await supabase.auth.signOut()
+    return { error: 'Conta não encontrada no COMI. Cadastre-se primeiro.' }
+  }
+
+  return { role: profile.role as string }
 }
 
 export async function signOut() {
