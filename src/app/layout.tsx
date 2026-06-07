@@ -36,7 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Toaster richColors position="top-right" />
         <Script id="sw-register" strategy="afterInteractive">{`
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js')
+            const h = window.location.hostname
+            const isLocal = h === 'localhost' || /^(192\\.168\\.|10\\.|172\\.(1[6-9]|2\\d|3[01])\\.)/.test(h)
+            if (!isLocal) {
+              navigator.serviceWorker.register('/sw.js')
+            } else {
+              navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()))
+            }
           }
         `}</Script>
       </body>
