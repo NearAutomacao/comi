@@ -1,0 +1,53 @@
+{
+  "name": "comi-desktop",
+  "version": "1.0.0",
+  "description": "COMI — Sistema de Gestão para Restaurantes",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:next\" \"wait-on http://localhost:3100 && electron .\"",
+    "dev:next": "cross-env PORT=3100 node ../node_modules/.bin/next dev ..",
+    "build": "npm run build:next && tsc && electron-builder",
+    "build:next": "cross-env PORT=3100 node ../node_modules/.bin/next build ..",
+    "dist": "electron-builder --win --x64"
+  },
+  "build": {
+    "appId": "br.com.nearautomacao.comi",
+    "productName": "COMI",
+    "copyright": "Copyright © 2025 Near Automação",
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "COMI"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "nearautomacao",
+      "repo": "comi-releases"
+    },
+    "extraResources": [
+      { "from": "../.next", "to": "app/.next", "filter": ["**/*"] },
+      { "from": "../public", "to": "app/public", "filter": ["**/*"] },
+      { "from": "../package.json", "to": "app/package.json" },
+      { "from": "../node_modules", "to": "app/node_modules", "filter": ["**/*"] }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "electron-log": "^5.2.4"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.3",
+    "wait-on": "^8.0.3",
+    "@types/node": "^22.0.0"
+  }
+}
