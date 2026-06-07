@@ -44,4 +44,5 @@ next-env.d.ts
 # Electron — credenciais embutidas (geradas pelo CI a partir dos secrets)
 comi-desktop/src/env.ts
 comi-desktop/dist/
+comi-desktop/release/
 comi-desktop/node_modules/

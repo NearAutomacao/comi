@@ -13,6 +13,14 @@
     "appId": "br.com.nearautomacao.comi",
     "productName": "COMI",
     "copyright": "Copyright © 2025 Near Automação",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/*.js",
+      "assets/**",
+      "package.json"
+    ],
     "win": {
       "target": [{ "target": "nsis", "arch": ["x64"] }],
       "icon": "assets/icon.ico"

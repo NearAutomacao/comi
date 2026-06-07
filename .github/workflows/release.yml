@@ -69,5 +69,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: COMI-Windows-Installer
-          path: comi-desktop/dist/*.exe
+          path: comi-desktop/release/*.exe
           if-no-files-found: ignore
