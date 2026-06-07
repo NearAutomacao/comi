@@ -8,6 +8,8 @@ import { setupUpdater } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 
 log.transports.file.level = 'info'
+// Desabilita console em produção — stdout não existe quando app é instalado (EPIPE)
+log.transports.console.level = process.env.NODE_ENV === 'development' ? 'debug' : false
 log.info('COMI Desktop iniciando...')
 
 const PORT = 3100
