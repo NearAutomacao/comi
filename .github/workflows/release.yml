@@ -49,6 +49,20 @@ jobs:
           ls -la .next/standalone/
           echo "server.js exists: $(test -f .next/standalone/server.js && echo YES || echo NO)"
 
+      # 4c. Atualiza versão do comi-desktop/package.json para corresponder à tag git
+      - name: Set app version from git tag
+        shell: bash
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('comi-desktop/package.json','utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('comi-desktop/package.json', JSON.stringify(pkg, null, 2));
+            console.log('Version set to', '$VERSION');
+          "
+
       # 5. Gera src/env.ts com as credenciais embutidas no binário Electron
       - name: Generate Electron env constants
         shell: bash
