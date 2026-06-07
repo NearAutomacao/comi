@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Plus, Pencil, Trash2, ImagePlus, X } from 'lucide-react'
+import { Plus, Pencil, Trash2, ImagePlus, X, UtensilsCrossed, Wine, ChevronDown } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import type { MenuCategory, MenuItem, CostItem } from '@/types'
 import Image from 'next/image'
@@ -39,7 +40,7 @@ const emptyForm = (): ItemForm => ({
 })
 
 export default function CardapioAdmin({ restaurantId, initialCategories, initialItems }: Props) {
-  const [categories, setCategories] = useState(initialCategories)
+  const [categories, setCategories] = useState<MenuCategory[]>(initialCategories)
   const [items, setItems] = useState(initialItems)
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [form, setForm] = useState<ItemForm>(emptyForm())
@@ -144,6 +145,16 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
     toast.success('Item removido')
   }
 
+  async function setCategoryPrinter(categoryId: string, printer: 'kitchen' | 'bar' | null) {
+    const { error } = await supabase
+      .from('menu_categories')
+      .update({ printer })
+      .eq('id', categoryId)
+    if (error) { toast.error('Erro ao salvar impressora'); return }
+    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, printer } : c))
+    toast.success(printer ? `Impressora: ${printer === 'kitchen' ? 'Cozinha' : 'Bar'}` : 'Impressora removida')
+  }
+
   async function toggleAvailable(item: MenuItem) {
     await supabase.from('menu_items').update({ available: !item.available }).eq('id', item.id)
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, available: !i.available } : i))
@@ -154,17 +165,53 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
   return (
     <>
       {/* Category tabs */}
-      <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
+      <div className="flex gap-2 mb-4 overflow-x-auto pb-1 items-center">
         {categories.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => setActiveCategory(cat.id)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-              activeCategory === cat.id ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {cat.name}
-          </button>
+          <div key={cat.id} className="flex items-center gap-0.5 flex-shrink-0">
+            <button
+              onClick={() => setActiveCategory(cat.id)}
+              className={`px-3 py-1.5 rounded-l-full text-sm font-medium whitespace-nowrap transition-colors ${
+                activeCategory === cat.id ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {cat.printer === 'kitchen' && <UtensilsCrossed size={11} className="inline mr-1 opacity-70" />}
+              {cat.printer === 'bar' && <Wine size={11} className="inline mr-1 opacity-70" />}
+              {cat.name}
+            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={`px-1.5 py-1.5 rounded-r-full text-sm transition-colors ${
+                    activeCategory === cat.id ? 'bg-orange-400 text-white hover:bg-orange-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                  title="Configurar impressora"
+                >
+                  <ChevronDown size={11} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="text-sm">
+                <div className="px-2 py-1 text-xs text-gray-400 font-medium">Impressora</div>
+                <DropdownMenuItem
+                  onClick={() => setCategoryPrinter(cat.id, 'kitchen')}
+                  className={cat.printer === 'kitchen' ? 'bg-orange-50 text-orange-700' : ''}
+                >
+                  <UtensilsCrossed size={13} className="mr-2" /> Cozinha
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setCategoryPrinter(cat.id, 'bar')}
+                  className={cat.printer === 'bar' ? 'bg-orange-50 text-orange-700' : ''}
+                >
+                  <Wine size={13} className="mr-2" /> Bar
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setCategoryPrinter(cat.id, null)}
+                  className={!cat.printer ? 'bg-gray-50 text-gray-500' : ''}
+                >
+                  Não definido
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         ))}
       </div>
 

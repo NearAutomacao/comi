@@ -13,7 +13,7 @@ import type { Table, OrderStatus } from '@/types'
 import { toast } from 'sonner'
 import PaymentModal from '@/components/pedidos/PaymentModal'
 import WaiterOrderDialog from './WaiterOrderDialog'
-import { PlusCircle } from 'lucide-react'
+import { ArrowRightLeft, Loader2, PlusCircle } from 'lucide-react'
 
 interface Props {
   table: Table
@@ -33,6 +33,9 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
   const [orderStatus, setOrderStatus] = useState<OrderStatus>(table.current_order?.status ?? 'open')
   const [showPayment, setShowPayment] = useState(false)
   const [showWaiterOrder, setShowWaiterOrder] = useState(false)
+  const [showTransfer, setShowTransfer] = useState(false)
+  const [emptyTables, setEmptyTables] = useState<{ id: string; number: number }[]>([])
+  const [transferring, setTransferring] = useState(false)
   const supabase = createClient()
 
   // Acompanha mudanças no current_order da mesa
@@ -71,6 +74,39 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
     onUpdate({ ...table, status: 'empty', current_order: null, guest_name: null, guest_phone: null })
     toast.success('Mesa liberada')
     onClose()
+  }
+
+  async function openTransfer() {
+    const { data } = await supabase
+      .from('tables')
+      .select('id, number')
+      .eq('restaurant_id', table.restaurant_id)
+      .eq('status', 'empty')
+      .neq('id', table.id)
+      .order('number')
+    setEmptyTables(data ?? [])
+    setShowTransfer(true)
+  }
+
+  async function handleTransfer(toTableId: string) {
+    setTransferring(true)
+    try {
+      const res = await fetch('/api/mesa/transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromTableId: table.id, toTableId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success(`Mesa transferida para Mesa ${data.toTableNumber}`)
+      onUpdate({ ...table, status: 'empty', current_order: null, guest_name: null, guest_phone: null })
+      onClose()
+    } catch (err) {
+      toast.error(String(err))
+    } finally {
+      setTransferring(false)
+      setShowTransfer(false)
+    }
   }
 
   async function handleOrderSent(orderId: string, addedTotal: number) {
@@ -169,6 +205,13 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
                   Pagamento
                 </Button>
               </div>
+              <Button
+                onClick={openTransfer}
+                variant="outline"
+                className="w-full border-blue-300 text-blue-600 hover:bg-blue-50"
+              >
+                <ArrowRightLeft size={15} className="mr-2" /> Trocar de mesa
+              </Button>
               <Button onClick={clearTable} variant="outline" className="w-full">
                 Liberar mesa
               </Button>
@@ -196,6 +239,39 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
           onSent={handleOrderSent}
         />
       )}
+
+      {/* Dialog de troca de mesa */}
+      <Dialog open={showTransfer} onOpenChange={v => { if (!transferring) setShowTransfer(v) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft size={16} className="text-blue-500" />
+              Trocar Mesa {table.number} para…
+            </DialogTitle>
+          </DialogHeader>
+          {emptyTables.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-4">
+              Nenhuma mesa livre disponível no momento.
+            </p>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 py-2">
+              {emptyTables.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => handleTransfer(t.id)}
+                  disabled={transferring}
+                  className="h-14 rounded-xl border-2 border-gray-200 bg-gray-50 hover:border-blue-400 hover:bg-blue-50 text-gray-700 font-bold text-lg transition-colors disabled:opacity-50"
+                >
+                  {transferring ? <Loader2 size={16} className="animate-spin mx-auto" /> : t.number}
+                </button>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-gray-400 text-center">
+            Pedidos e comandas serão transferidos automaticamente
+          </p>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

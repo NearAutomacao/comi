@@ -12,7 +12,7 @@ import type { Order, OrderStatus } from '@/types'
 import PaymentModal from './PaymentModal'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { UtensilsCrossed } from 'lucide-react'
+import { Hash, UtensilsCrossed, User } from 'lucide-react'
 
 const statusConfig: Record<OrderStatus, { label: string; class: string }> = {
   open:      { label: 'Novo',       class: 'bg-blue-100 text-blue-700' },
@@ -26,11 +26,15 @@ const statusPriority: Record<OrderStatus, number> = {
   open: 0, preparing: 1, served: 2, closed: 3, cancelled: 4,
 }
 
-type RichOrder = Order & { table?: { number: number }; restaurant_id?: string }
+type RichOrder = Order & {
+  table?: { number: number }
+  restaurant_id?: string
+  session?: { guest_name: string } | null
+}
 
 export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[] }) {
   const [orders, setOrders] = useState<RichOrder[]>(initialOrders as RichOrder[])
-  const [payingOrder, setPayingOrder] = useState<RichOrder | null>(null)
+  const [payingTableId, setPayingTableId] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -39,12 +43,16 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
       .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
         const { data } = await supabase
           .from('orders')
-          .select('*, table:tables(number), order_items(*, menu_item:menu_items(name, price))')
+          .select('*, table:tables(number), order_items(*, menu_item:menu_items(name, price)), session:table_sessions(guest_name)')
           .eq('id', payload.new.id)
           .single()
         if (data) {
           setOrders(prev => [...prev, data as RichOrder])
-          toast('Novo pedido!', { description: `Mesa ${(data as RichOrder).table?.number}`, icon: '🍽️' })
+          const order = data as RichOrder
+          toast('Novo pedido!', {
+            description: `Mesa ${order.table?.number}${order.session?.guest_name ? ` · ${order.session.guest_name}` : ''} · #${String(order.code ?? '').padStart(3, '0')}`,
+            icon: '🍽️',
+          })
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {
@@ -66,13 +74,12 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
     toast.success('Status atualizado')
   }
 
-  // Group by table, sorted by table number
+  // Agrupa por mesa, ordenado por número
   const groups = useMemo(() => {
-    const map = new Map<string, { tableNum: number; tableId: string; orders: RichOrder[] }>()
+    const map = new Map<string, { tableNum: number; tableId: string; restaurantId: string; orders: RichOrder[] }>()
     for (const order of orders) {
       const key = order.table_id ?? 'sem-mesa'
-      const tableNum = order.table?.number ?? 0
-      if (!map.has(key)) map.set(key, { tableNum, tableId: key, orders: [] })
+      if (!map.has(key)) map.set(key, { tableNum: order.table?.number ?? 0, tableId: key, restaurantId: order.restaurant_id ?? '', orders: [] })
       map.get(key)!.orders.push(order)
     }
     return [...map.values()]
@@ -87,6 +94,8 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
         ),
       }))
   }, [orders])
+
+  const payingGroup = payingTableId ? groups.find(g => g.tableId === payingTableId) : null
 
   if (orders.length === 0) {
     return (
@@ -105,7 +114,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
           const ws = statusConfig[group.worstStatus]
           return (
             <div key={group.tableId} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-              {/* Table header */}
+              {/* Cabeçalho da mesa */}
               <div className="flex items-center justify-between px-4 py-3 bg-orange-50 border-b">
                 <span className="font-bold text-orange-700 text-lg">
                   Mesa {group.tableNum || '—'}
@@ -118,17 +127,34 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
                 </div>
               </div>
 
-              {/* Orders list */}
+              {/* Lista de pedidos */}
               <div className="divide-y">
-                {group.orders.map((order, idx) => {
+                {group.orders.map(order => {
                   const s = statusConfig[order.status]
+                  const codeStr = order.code != null ? `#${String(order.code).padStart(3, '0')}` : null
                   return (
                     <div key={order.id} className="px-4 py-3 space-y-2">
-                      <div className="flex items-center justify-between text-xs text-gray-400">
-                        <span>Pedido {idx + 1} · {format(new Date(order.created_at), 'HH:mm', { locale: ptBR })}</span>
+                      {/* Linha de meta: código, nome, horário, status */}
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <div className="flex items-center gap-2">
+                          {codeStr && (
+                            <span className="flex items-center gap-0.5 font-mono font-semibold text-orange-600">
+                              <Hash size={10} />{codeStr.slice(1)}
+                            </span>
+                          )}
+                          {order.session?.guest_name && (
+                            <span className="flex items-center gap-0.5 text-gray-600">
+                              <User size={10} />{order.session.guest_name}
+                            </span>
+                          )}
+                          <span className="text-gray-400">
+                            {format(new Date(order.created_at), 'HH:mm', { locale: ptBR })}
+                          </span>
+                        </div>
                         <Badge className={`${s.class} text-xs`} variant="outline">{s.label}</Badge>
                       </div>
 
+                      {/* Itens */}
                       <ul className="space-y-0.5">
                         {(order.order_items ?? []).map((item: { id: string; quantity: number; menu_item?: { name: string } }) => (
                           <li key={item.id} className="text-sm text-gray-700">
@@ -137,6 +163,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
                         ))}
                       </ul>
 
+                      {/* Total e status select */}
                       <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
                         <span className="font-semibold text-gray-700">{formatCurrency(order.total)}</span>
                         <Select value={order.status} onValueChange={v => updateStatus(order.id, v as OrderStatus)}>
@@ -157,7 +184,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
 
               <Separator />
 
-              {/* Table footer */}
+              {/* Rodapé da mesa */}
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm font-bold text-gray-700">
                   Total: {formatCurrency(group.total)}
@@ -165,7 +192,7 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
                 <Button
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white text-xs"
-                  onClick={() => setPayingOrder(group.orders[0])}
+                  onClick={() => setPayingTableId(group.tableId)}
                 >
                   Pagar mesa
                 </Button>
@@ -175,16 +202,15 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
         })}
       </div>
 
-      {payingOrder && (
+      {payingGroup && (
         <PaymentModal
-          orderId={payingOrder.id}
-          restaurantId={payingOrder.restaurant_id ?? ''}
-          total={groups.find(g => g.tableId === payingOrder.table_id)?.total ?? payingOrder.total}
-          onClose={() => setPayingOrder(null)}
+          orderId={payingGroup.orders[0].id}
+          restaurantId={payingGroup.restaurantId}
+          total={payingGroup.total}
+          onClose={() => setPayingTableId(null)}
           onPaid={() => {
-            const tableId = payingOrder.table_id
-            setOrders(prev => prev.filter(o => o.table_id !== tableId))
-            setPayingOrder(null)
+            setOrders(prev => prev.filter(o => o.table_id !== payingGroup.tableId))
+            setPayingTableId(null)
             toast.success('Mesa paga e encerrada!')
           }}
         />

@@ -6,7 +6,7 @@ export default async function PedidosAdminPage() {
 
   const { data: orders } = await supabase
     .from('orders')
-    .select('*, table:tables(number), order_items(*, menu_item:menu_items(name, price))')
+    .select('*, table:tables(number), order_items(*, menu_item:menu_items(name, price)), session:table_sessions(guest_name)')
     .in('status', ['open', 'preparing', 'served'])
     .order('created_at', { ascending: true })
 
