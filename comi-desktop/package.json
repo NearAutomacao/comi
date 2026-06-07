@@ -36,7 +36,6 @@
       "provider": "github",
       "owner": "NearAutomacao",
       "repo": "comi",
-      "draft": false,
       "releaseType": "release"
     },
     "extraResources": [
