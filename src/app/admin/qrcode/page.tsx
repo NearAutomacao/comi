@@ -17,11 +17,11 @@ export default async function QRCodePage() {
   const isDesktop = !!localIP && localIP !== '127.0.0.1'
 
   const localUrl = isDesktop
-    ? `http://${localIP}:3100/cardapio/${restaurant?.slug}`
+    ? `http://${localIP}:3100/cardapio`
     : null
 
   const productionUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/cardapio/${restaurant?.slug}`
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/cardapio`
     : null
 
   return (
