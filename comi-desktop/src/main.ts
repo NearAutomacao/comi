@@ -117,7 +117,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     title: 'COMI',
-    icon: path.join(__dirname, '..', 'assets', 'icon.png'),
+    icon: path.join(__dirname, '..', 'assets', 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -153,7 +153,7 @@ function createWindow() {
 // Bandeja do sistema
 // ──────────────────────────────────────────
 function createTray() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'icon.png')
+  const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico')
   tray = new Tray(nativeImage.createFromPath(iconPath))
 
   const menu = Menu.buildFromTemplate([
