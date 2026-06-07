@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, dialog, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import log from 'electron-log'
 import * as path from 'path'
 import * as fs from 'fs'
@@ -7,6 +8,8 @@ import * as http from 'http'
 import { setupUpdater } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET } from './env'
+
+let isQuitting = false
 
 log.transports.file.level = 'info'
 // Desabilita console em produção — stdout não existe em app instalado (causa EPIPE)
@@ -127,7 +130,14 @@ function createWindow() {
 
   // Desktop app sempre entra no painel admin (redireciona para login se não autenticado)
   mainWindow.loadURL(APP_URL + '/admin')
-  mainWindow.on('closed', () => { mainWindow = null })
+
+  // X fecha a janela mas mantém o app na bandeja — não destrói mainWindow
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault()
+      mainWindow?.hide()
+    }
+  })
 
   // Navegação por teclado: Alt+← volta, Alt+→ avança
   mainWindow.webContents.on('before-input-event', (_event, input) => {
@@ -150,6 +160,19 @@ function createWindow() {
 }
 
 // ──────────────────────────────────────────
+// Utilitário: exibe/restaura a janela principal
+// ──────────────────────────────────────────
+function showWindow() {
+  if (!mainWindow) {
+    createWindow()
+  } else {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+}
+
+// ──────────────────────────────────────────
 // Bandeja do sistema
 // ──────────────────────────────────────────
 function createTray() {
@@ -157,16 +180,22 @@ function createTray() {
   tray = new Tray(nativeImage.createFromPath(iconPath))
 
   const menu = Menu.buildFromTemplate([
-    { label: 'Abrir COMI', click: () => mainWindow?.show() },
+    { label: 'Abrir COMI', click: () => showWindow() },
     { type: 'separator' },
-    { label: 'Verificar atualizações', click: () => mainWindow?.webContents.send('trigger-update-check') },
+    {
+      label: 'Verificar atualizações',
+      click: () => {
+        autoUpdater.checkForUpdates().catch(err => log.warn('Update check failed:', err))
+        showWindow()
+      },
+    },
     { type: 'separator' },
-    { label: 'Sair', click: () => app.quit() },
+    { label: 'Sair', click: () => { isQuitting = true; app.quit() } },
   ])
 
   tray.setToolTip('COMI — Sistema de Gestão')
   tray.setContextMenu(menu)
-  tray.on('double-click', () => mainWindow?.show())
+  tray.on('double-click', () => showWindow())
 }
 
 // ──────────────────────────────────────────
@@ -200,12 +229,7 @@ if (!gotLock) {
   app.quit()
 }
 
-app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  }
-})
+app.on('second-instance', () => { showWindow() })
 
 // ──────────────────────────────────────────
 // Lifecycle
@@ -239,6 +263,7 @@ app.on('activate', () => {
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
   stopPrintAgent()
   if (nextServerProcess) {
     log.info('[server] Encerrando Next.js...')
