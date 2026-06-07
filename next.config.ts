@@ -1,10 +1,10 @@
 import type { NextConfig } from 'next'
 
-const isDesktopBuild = process.env.BUILD_TARGET === 'desktop'
-
 const nextConfig: NextConfig = {
-  // Standalone output for Electron packaging (includes server.js + minimal node_modules)
-  ...(isDesktopBuild ? { output: 'standalone' } : { turbopack: {} }),
+  // standalone: gera .next/standalone/server.js para o app Electron
+  // turbopack: usado apenas no `next dev`, não afeta o build de produção
+  output: 'standalone',
+  turbopack: {},
   images: {
     remotePatterns: [
       {

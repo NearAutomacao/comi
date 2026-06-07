@@ -36,11 +36,18 @@ jobs:
       - name: Build Next.js (standalone)
         run: npm run build
         env:
-          BUILD_TARGET: desktop
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           MESA_SESSION_SECRET: ${{ secrets.MESA_SESSION_SECRET }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
+
+      # 4b. Verifica que o standalone foi gerado
+      - name: Verify standalone output
+        shell: bash
+        run: |
+          echo "=== .next/standalone contents ==="
+          ls -la .next/standalone/
+          echo "server.js exists: $(test -f .next/standalone/server.js && echo YES || echo NO)"
 
       # 5. Gera src/env.ts com as credenciais embutidas no binário Electron
       - name: Generate Electron env constants
