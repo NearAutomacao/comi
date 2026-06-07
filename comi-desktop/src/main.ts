@@ -125,8 +125,19 @@ function createWindow() {
     },
   })
 
-  mainWindow.loadURL(APP_URL)
+  // Desktop app sempre entra no painel admin (redireciona para login se não autenticado)
+  mainWindow.loadURL(APP_URL + '/admin')
   mainWindow.on('closed', () => { mainWindow = null })
+
+  // Navegação por teclado: Alt+← volta, Alt+→ avança
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (input.type !== 'keyDown') return
+    if (input.alt && input.key === 'ArrowLeft' && mainWindow?.webContents.canGoBack()) {
+      mainWindow.webContents.goBack()
+    } else if (input.alt && input.key === 'ArrowRight' && mainWindow?.webContents.canGoForward()) {
+      mainWindow.webContents.goForward()
+    }
+  })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith(APP_URL)) shell.openExternal(url)
