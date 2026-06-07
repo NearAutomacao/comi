@@ -6,7 +6,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import * as http from 'http'
 import * as os from 'os'
-import { setupUpdater } from './updater'
+import { setupUpdater, checkManually } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET } from './env'
 
@@ -200,8 +200,8 @@ function createTray() {
     {
       label: 'Verificar atualizações',
       click: () => {
-        autoUpdater.checkForUpdates().catch(err => log.warn('Update check failed:', err))
         showWindow()
+        checkManually()
       },
     },
     { type: 'separator' },
