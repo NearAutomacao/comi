@@ -178,6 +178,21 @@ ipcMain.handle('set-restaurant-config', async (_, { restaurantId, printerConfig 
 })
 
 // ──────────────────────────────────────────
+// Single instance lock — impede duas janelas no mesmo PC
+// ──────────────────────────────────────────
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+}
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+})
+
+// ──────────────────────────────────────────
 // Lifecycle
 // ──────────────────────────────────────────
 app.whenReady().then(async () => {
