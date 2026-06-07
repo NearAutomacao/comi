@@ -64,14 +64,26 @@ jobs:
           "
 
       # 5. Gera src/env.ts com as credenciais embutidas no binário Electron
+      #    Usa node + JSON.stringify para escapar corretamente qualquer caractere especial
       - name: Generate Electron env constants
         shell: bash
         run: |
-          cat > comi-desktop/src/env.ts << 'EOF'
-          export const SUPABASE_URL = '${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}'
-          export const SUPABASE_ANON_KEY = '${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}'
-          export const MESA_SESSION_SECRET = '${{ secrets.MESA_SESSION_SECRET }}'
-          EOF
+          node -e "
+            const fs = require('fs');
+            const u = JSON.stringify(process.env._SUPA_URL);
+            const k = JSON.stringify(process.env._SUPA_KEY);
+            const s = JSON.stringify(process.env._MESA_SEC);
+            fs.writeFileSync('comi-desktop/src/env.ts',
+              'export const SUPABASE_URL = ' + u + '\n' +
+              'export const SUPABASE_ANON_KEY = ' + k + '\n' +
+              'export const MESA_SESSION_SECRET = ' + s + '\n'
+            );
+            console.log('env.ts gerado, URL length:', u.length);
+          "
+        env:
+          _SUPA_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          _SUPA_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          _MESA_SEC: ${{ secrets.MESA_SESSION_SECRET }}
 
       # 6. Instala deps do Electron
       - name: Install Electron dependencies
