@@ -100,9 +100,9 @@ export async function signIn(formData: FormData) {
 
   if (error) return { error: 'Email ou senha incorretos' }
 
-  // Garante que o usuário pertence ao COMI (não ao gas-delivery ou outro sistema)
-  const admin = await createAdminClient()
-  const { data: profile } = await admin
+  // Usa o mesmo client (já tem a sessão) para checar o perfil
+  // Evita depender de SUPABASE_SERVICE_ROLE_KEY, que não está disponível no Electron
+  const { data: profile } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', data.user.id)
