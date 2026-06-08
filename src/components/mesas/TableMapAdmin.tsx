@@ -33,9 +33,18 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
       .channel('tables-realtime')
       .on('postgres_changes', { event: '*', schema: 'comi', table: 'tables' }, payload => {
         if (payload.eventType === 'UPDATE') {
-          setTables(prev => prev.map(t =>
-            t.id === (payload.new as Table).id ? { ...t, ...(payload.new as Table) } : t
-          ))
+          const newTable = payload.new as Table
+          setTables(prev => {
+            const existing = prev.find(t => t.id === newTable.id)
+            if (existing && existing.status !== newTable.status) {
+              if (newTable.status === 'occupied') {
+                toast.success(`Mesa ${newTable.number} — cliente sentou`)
+              } else if (newTable.status === 'empty') {
+                toast.info(`Mesa ${newTable.number} — comanda fechada`)
+              }
+            }
+            return prev.map(t => t.id === newTable.id ? { ...t, ...newTable } : t)
+          })
         }
         if (payload.eventType === 'INSERT') {
           setTables(prev => [...prev, { ...(payload.new as Table), current_order: null }])
@@ -46,14 +55,11 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
         const newOrder = payload.new as { id: string; table_id: string; total: number; status: string; restaurant_id: string; customer_id?: string; payment_status: string; created_at: string }
-        toast('🍽️ Novo pedido!', { description: `Mesa sendo atendida` })
-        // Busca o pedido completo com itens
         const { data: completeOrder } = await supabase
           .from('orders')
           .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
           .eq('id', newOrder.id)
           .single()
-        // Atualiza mesa com current_order
         setTables(prev => prev.map(t =>
           t.id === newOrder.table_id
             ? { ...t, status: 'occupied' as const, current_order: completeOrder as any }

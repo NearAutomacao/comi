@@ -6,11 +6,12 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard, MapPin, UtensilsCrossed, ClipboardList,
-  Calendar, Package, Settings, LogOut,
+  Calendar, Package, Settings, LogOut, RefreshCw,
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { isElectron, electronAPI } from '@/lib/electron'
 
 interface Props {
   managerName: string
@@ -33,12 +34,19 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
   const supabase = useRef(createClient()).current
   const [mesasBadge, setMesasBadge] = useState(0)
   const [ordersBadge, setOrdersBadge] = useState(0)
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null)
 
   // Limpa badges ao entrar nas respectivas telas
   useEffect(() => {
     if (pathname === '/admin/mesas') setMesasBadge(0)
     if (pathname === '/admin/pedidos') setOrdersBadge(0)
   }, [pathname])
+
+  // Escuta atualização disponível no Electron
+  useEffect(() => {
+    if (!isElectron()) return
+    electronAPI()?.onUpdateDownloaded(version => setUpdateVersion(version))
+  }, [])
 
   // Realtime: notifica quando cliente senta (status → occupied)
   useEffect(() => {
@@ -57,11 +65,14 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
         payload => {
           const updated = payload.new as { status: string; number: number; guest_name?: string }
           if (updated.status === 'occupied') {
-            toast(`Mesa ${updated.number} ocupada`, {
-              description: updated.guest_name ? `Cliente: ${updated.guest_name}` : undefined,
-              icon: '🪑',
-            })
-            if (pathname !== '/admin/mesas') setMesasBadge(n => n + 1)
+            // TableMapAdmin já mostra toast quando estiver na tela de mesas — evita duplicata
+            if (pathname !== '/admin/mesas') {
+              toast(`Mesa ${updated.number} ocupada`, {
+                description: updated.guest_name ? `Cliente: ${updated.guest_name}` : undefined,
+                icon: '🪑',
+              })
+              setMesasBadge(n => n + 1)
+            }
           }
         }
       )
@@ -154,6 +165,15 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
           })}
         </nav>
 
+        {updateVersion && (
+          <button
+            onClick={() => electronAPI()?.quitAndInstall()}
+            className="mx-3 mb-2 flex items-center gap-2 text-xs bg-green-600 hover:bg-green-500 text-white rounded-lg px-3 py-2 transition-colors"
+          >
+            <RefreshCw size={13} />
+            <span>v{updateVersion} disponível — Reiniciar</span>
+          </button>
+        )}
         <div className="p-3 border-t border-gray-700">
           <form action={signOut}>
             <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-white w-full px-3 py-2">

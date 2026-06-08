@@ -6,7 +6,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import * as http from 'http'
 import * as os from 'os'
-import { setupUpdater, checkManually } from './updater'
+import { setupUpdater, checkManually, updaterEvents } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
 import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET, SUPABASE_SERVICE_ROLE_KEY } from './env'
 
@@ -188,13 +188,17 @@ function showWindow() {
 // ──────────────────────────────────────────
 // Bandeja do sistema
 // ──────────────────────────────────────────
-function createTray() {
-  const iconPath = path.join(__dirname, '..', 'assets', 'icon.ico')
-  tray = new Tray(nativeImage.createFromPath(iconPath))
-
+function buildTrayMenu(updateReady?: string) {
   const version = app.getVersion()
-  const menu = Menu.buildFromTemplate([
+  return Menu.buildFromTemplate([
     { label: `COMI v${version}`, enabled: false },
+    ...(updateReady ? [
+      { type: 'separator' as const },
+      {
+        label: `⬆ Atualização v${updateReady} pronta — Reiniciar`,
+        click: () => { autoUpdater.quitAndInstall() },
+      },
+    ] : []),
     { type: 'separator' },
     { label: 'Abrir COMI', click: () => showWindow() },
     { type: 'separator' },
@@ -208,10 +212,24 @@ function createTray() {
     { type: 'separator' },
     { label: 'Sair', click: () => { isQuitting = true; app.quit() } },
   ])
+}
 
+function createTray() {
+  // Usa o PNG redimensionado para 16px — ICO escalado pelo Windows fica borrado na bandeja
+  const pngPath = path.join(__dirname, '..', 'assets', 'icon.png')
+  const trayIcon = nativeImage.createFromPath(pngPath).resize({ width: 16, height: 16, quality: 'best' })
+  tray = new Tray(trayIcon)
+
+  const version = app.getVersion()
   tray.setToolTip(`COMI v${version} — Sistema de Gestão`)
-  tray.setContextMenu(menu)
+  tray.setContextMenu(buildTrayMenu())
   tray.on('double-click', () => showWindow())
+
+  // Atualiza bandeja quando update está pronto
+  updaterEvents.on('update-downloaded', (version: string) => {
+    tray?.setToolTip(`COMI — Atualização v${version} pronta!`)
+    tray?.setContextMenu(buildTrayMenu(version))
+  })
 }
 
 // ──────────────────────────────────────────

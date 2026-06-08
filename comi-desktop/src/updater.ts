@@ -1,6 +1,7 @@
 import { autoUpdater } from 'electron-updater'
 import log from 'electron-log'
 import { BrowserWindow, dialog, ipcMain, app } from 'electron'
+import { EventEmitter } from 'events'
 
 autoUpdater.logger = log
 autoUpdater.autoDownload = true
@@ -8,6 +9,9 @@ autoUpdater.autoInstallOnAppQuit = true
 
 let _window: BrowserWindow | null = null
 let _manualCheck = false
+
+// Emissor interno para notificar o main.ts sobre eventos do updater
+export const updaterEvents = new EventEmitter()
 
 export function setupUpdater(mainWindow: BrowserWindow) {
   _window = mainWindow
@@ -51,6 +55,11 @@ export function setupUpdater(mainWindow: BrowserWindow) {
 
   autoUpdater.on('update-downloaded', info => {
     log.info('[updater] Download concluído:', info.version)
+    // Notifica o renderer para mostrar badge na sidebar
+    mainWindow.webContents.send('update-downloaded', info.version)
+    // Notifica o main.ts para atualizar o tray
+    updaterEvents.emit('update-downloaded', info.version)
+
     dialog.showMessageBox(mainWindow, {
       type: 'info',
       title: 'Atualização pronta',
@@ -78,6 +87,7 @@ export function setupUpdater(mainWindow: BrowserWindow) {
   })
 
   ipcMain.handle('check-for-updates', () => checkManually())
+  ipcMain.handle('quit-and-install', () => autoUpdater.quitAndInstall())
 
   // Verifica automaticamente 10s após iniciar
   setTimeout(() => {

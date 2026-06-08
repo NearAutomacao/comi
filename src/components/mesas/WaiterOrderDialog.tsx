@@ -60,46 +60,52 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
     if (cart.length === 0) return
     setLoading(true)
 
-    let orderId = existingOrderId
-
-    // Cria pedido se não existir
-    if (!orderId) {
-      const { data: order, error } = await supabase
-        .from('orders')
-        .insert({ restaurant_id: restaurantId, table_id: tableId, status: 'open' })
-        .select()
-        .single()
-
-      if (error || !order) {
-        toast.error('Erro ao criar pedido')
+    // Quando há pedido existente (adicionando itens), insere direto nos order_items
+    if (existingOrderId) {
+      const { error: itemsError } = await supabase.from('order_items').insert(
+        cart.map(e => ({
+          restaurant_id: restaurantId,
+          order_id: existingOrderId,
+          menu_item_id: e.item.id,
+          quantity: e.qty,
+          unit_price: e.item.price,
+        }))
+      )
+      if (itemsError) {
+        toast.error('Erro ao adicionar itens')
         setLoading(false)
         return
       }
-      orderId = order.id
-
-      // Marca mesa como ocupada
-      await supabase.from('tables').update({ status: 'occupied' }).eq('id', tableId)
+      toast.success('Itens adicionados!')
+      onSent(existingOrderId, total)
+      onClose()
+      return
     }
 
-    // Insere os itens
-    const { error: itemsError } = await supabase.from('order_items').insert(
-      cart.map(e => ({
-        restaurant_id: restaurantId,
-        order_id: orderId!,
-        menu_item_id: e.item.id,
-        quantity: e.qty,
-        unit_price: e.item.price,
-      }))
-    )
+    // Novo pedido: usa a API para garantir order_code sequencial e print_jobs
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableId,
+        items: cart.map(e => ({
+          menuItemId: e.item.id,
+          quantity: e.qty,
+          unitPrice: e.item.price,
+        })),
+      }),
+    })
 
-    if (itemsError) {
-      toast.error('Erro ao adicionar itens')
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({ error: 'Erro desconhecido' }))
+      toast.error('Erro ao criar pedido: ' + data.error)
       setLoading(false)
       return
     }
 
+    const { orderId } = await res.json()
     toast.success('Pedido lançado!')
-    onSent(orderId!, total)
+    onSent(orderId, total)
     onClose()
   }
 

@@ -48,11 +48,6 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
           .single()
         if (data) {
           setOrders(prev => [...prev, data as RichOrder])
-          const order = data as RichOrder
-          toast('Novo pedido!', {
-            description: `Mesa ${order.table?.number}${order.session?.guest_name ? ` · ${order.session.guest_name}` : ''} · #${String(order.code ?? '').padStart(3, '0')}`,
-            icon: '🍽️',
-          })
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {

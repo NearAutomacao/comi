@@ -41,8 +41,11 @@ export default function ClienteHeader({ userName }: Props) {
           const updated = payload.new as { status: string }
           if (updated.status === 'empty') {
             clearSession()
-            toast.info('Sua mesa foi liberada pelo restaurante.')
-            router.push('/cardapio')
+            // Não redireciona se o próprio cliente acabou de fechar a conta (/conta mostra comprovante)
+            if (pathname !== '/conta') {
+              toast.info('Sua mesa foi liberada pelo restaurante.')
+              router.push('/cardapio')
+            }
           }
         }
       )

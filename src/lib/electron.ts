@@ -10,7 +10,9 @@ declare global {
       }) => Promise<{ ok: boolean }>
       onUpdateAvailable: (cb: (version: string) => void) => void
       onUpdateProgress: (cb: (percent: number) => void) => void
+      onUpdateDownloaded: (cb: (version: string) => void) => void
       onTriggerUpdateCheck: (cb: () => void) => void
+      quitAndInstall: () => Promise<void>
     }
   }
 }
