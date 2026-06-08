@@ -32,6 +32,7 @@ export default function ContaPage() {
   const { tableId, tableNumber, clearSession } = useCartStore()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [closing, setClosing] = useState(false)
   const [receipt, setReceipt] = useState<{ lines: ReceiptLine[]; total: number; tableNumber: number | null } | null>(null)
 
   useEffect(() => {
@@ -57,9 +58,19 @@ export default function ContaPage() {
 
   const grandTotal = orders.reduce((s, o) => s + (o.total ?? 0), 0)
 
-  function handleClose() {
-    // Salva resumo antes de limpar a sessão
-    setReceipt({ lines: Object.values(allItems), total: grandTotal, tableNumber })
+  async function handleClose() {
+    setClosing(true)
+    const lines = Object.values(allItems)
+    const total = grandTotal
+
+    // Fecha pedidos e libera mesa no servidor (pagamento ocorre no caixa)
+    await fetch('/api/conta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tableId, skipPayment: true }),
+    })
+
+    setReceipt({ lines, total, tableNumber })
     clearSession()
     document.cookie = 'mesa_session=; Max-Age=0; path=/'
     document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'
@@ -145,9 +156,10 @@ export default function ContaPage() {
 
       <Button
         onClick={handleClose}
+        disabled={closing}
         className="w-full bg-orange-500 hover:bg-orange-600 text-white py-5 text-base"
       >
-        Fechar aba
+        {closing ? <><Loader2 size={16} className="animate-spin mr-2" /> Fechando...</> : 'Fechar aba'}
       </Button>
     </div>
   )

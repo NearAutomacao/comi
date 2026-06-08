@@ -37,12 +37,15 @@ export async function GET(req: Request) {
 }
 
 // POST /api/conta
-// Registra pagamento, fecha pedidos, libera mesa
+// Fecha pedidos e libera mesa.
+// skipPayment=true: pagamento no caixa, não registra payment record.
+// skipPayment=false (padrão): registra payments normalmente.
 export async function POST(req: Request) {
   const body = await req.json()
-  const { tableId, payments } = body as {
+  const { tableId, payments, skipPayment } = body as {
     tableId: string
-    payments: {
+    skipPayment?: boolean
+    payments?: {
       order_id: string
       restaurant_id: string
       method: 'credit_card' | 'debit_card' | 'pix' | 'cash'
@@ -50,30 +53,50 @@ export async function POST(req: Request) {
     }[]
   }
 
-  if (!tableId || !payments?.length) {
-    return NextResponse.json({ error: 'tableId e payments são obrigatórios' }, { status: 400 })
+  if (!tableId) {
+    return NextResponse.json({ error: 'tableId é obrigatório' }, { status: 400 })
+  }
+  if (!skipPayment && !payments?.length) {
+    return NextResponse.json({ error: 'payments é obrigatório quando skipPayment não é true' }, { status: 400 })
   }
 
   const admin = await createAdminClient()
 
-  const { error: payError } = await admin.from('payments').insert(
-    payments.map(p => ({
-      restaurant_id: p.restaurant_id,
-      order_id: p.order_id,
-      method: p.method,
-      amount: p.amount,
-      status: 'approved',
-      installments: 1,
-    }))
-  )
-  if (payError) return NextResponse.json({ error: payError.message }, { status: 500 })
+  // Registra pagamentos (só quando não for pagamento no caixa)
+  if (!skipPayment && payments?.length) {
+    const { error: payError } = await admin.from('payments').insert(
+      payments.map(p => ({
+        restaurant_id: p.restaurant_id,
+        order_id: p.order_id,
+        method: p.method,
+        amount: p.amount,
+        status: 'approved',
+        installments: 1,
+      }))
+    )
+    if (payError) return NextResponse.json({ error: payError.message }, { status: 500 })
+  }
 
-  const orderIds = [...new Set(payments.map(p => p.order_id))]
-  const { error: orderError } = await admin
-    .from('orders')
-    .update({ status: 'closed', payment_status: 'paid' })
-    .in('id', orderIds)
-  if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 })
+  // Fecha os pedidos: se skipPayment, fecha todos da mesa; senão fecha só os enviados
+  let orderIds: string[]
+  if (skipPayment) {
+    const { data: openOrders } = await admin
+      .from('orders')
+      .select('id')
+      .eq('table_id', tableId)
+      .in('status', ['open', 'preparing', 'served'])
+    orderIds = (openOrders ?? []).map(o => o.id)
+  } else {
+    orderIds = [...new Set((payments ?? []).map(p => p.order_id))]
+  }
+
+  if (orderIds.length > 0) {
+    const { error: orderError } = await admin
+      .from('orders')
+      .update({ status: 'closed', payment_status: skipPayment ? 'unpaid' : 'paid' })
+      .in('id', orderIds)
+    if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 })
+  }
 
   // Verifica se ainda há pedidos abertos na mesa (outros clientes)
   const { data: remaining } = await admin
