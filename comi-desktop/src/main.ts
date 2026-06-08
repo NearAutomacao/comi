@@ -8,7 +8,7 @@ import * as http from 'http'
 import * as os from 'os'
 import { setupUpdater, checkManually } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
-import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET } from './env'
+import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET, SUPABASE_SERVICE_ROLE_KEY } from './env'
 
 let isQuitting = false
 
@@ -87,6 +87,7 @@ function startNextServer(): Promise<void> {
         NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
         MESA_SESSION_SECRET: MESA_SESSION_SECRET,
+        SUPABASE_SERVICE_ROLE_KEY: SUPABASE_SERVICE_ROLE_KEY,
       },
       cwd: appDir,
       stdio: 'pipe',

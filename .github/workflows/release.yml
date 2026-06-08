@@ -73,10 +73,12 @@ jobs:
             const u = JSON.stringify(process.env._SUPA_URL);
             const k = JSON.stringify(process.env._SUPA_KEY);
             const s = JSON.stringify(process.env._MESA_SEC);
+            const r = JSON.stringify(process.env._SUPA_SVC);
             fs.writeFileSync('comi-desktop/src/env.ts',
               'export const SUPABASE_URL = ' + u + '\n' +
               'export const SUPABASE_ANON_KEY = ' + k + '\n' +
-              'export const MESA_SESSION_SECRET = ' + s + '\n'
+              'export const MESA_SESSION_SECRET = ' + s + '\n' +
+              'export const SUPABASE_SERVICE_ROLE_KEY = ' + r + '\n'
             );
             console.log('env.ts gerado, URL length:', u.length);
           "
@@ -84,6 +86,7 @@ jobs:
           _SUPA_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           _SUPA_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           _MESA_SEC: ${{ secrets.MESA_SESSION_SECRET }}
+          _SUPA_SVC: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       # 6. Instala deps do Electron
       - name: Install Electron dependencies
