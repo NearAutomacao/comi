@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(req: Request) {
   const { tableId, guestName, guestPhone } = await req.json()
+  const isHttps = req.headers.get('x-forwarded-proto') === 'https' || req.url.startsWith('https://')
 
   if (!tableId || !guestName?.trim()) {
     return NextResponse.json({ error: 'tableId e nome são obrigatórios' }, { status: 400 })
@@ -69,7 +70,7 @@ export async function POST(req: Request) {
     path: '/',
     maxAge: 60 * 60 * 8,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isHttps,
     sameSite: 'lax',
   })
 

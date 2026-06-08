@@ -6,7 +6,7 @@ import { verifyMesaSessionToken } from '@/lib/mesa-session'
 const PROTECTED_AUTH = ['/pedidos', '/reservas']
 
 // Estas rotas exigem sessão de mesa válida (JWT token)
-const PROTECTED_MESA = ['/cardapio', '/carrinho', '/conta']
+const PROTECTED_MESA = ['/carrinho', '/conta']
 
 function isProtectedAuth(pathname: string) {
   return PROTECTED_AUTH.some(p => pathname === p || pathname.startsWith(p + '/'))
