@@ -12,8 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Plus, Pencil, Trash2, ImagePlus, X, UtensilsCrossed, Wine, ChevronDown } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Plus, Pencil, Trash2, ImagePlus, X, UtensilsCrossed, Wine, ChevronDown, FolderPlus } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { toast } from 'sonner'
 import type { MenuCategory, MenuItem, CostItem } from '@/types'
 import Image from 'next/image'
@@ -47,7 +47,49 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
   const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [activeCategory, setActiveCategory] = useState(initialCategories[0]?.id ?? '')
+  const [catDialog, setCatDialog] = useState<{ mode: 'new' | 'rename'; catId?: string; value: string } | null>(null)
   const supabase = createClient()
+
+  async function handleSaveCategory() {
+    const name = catDialog?.value.trim()
+    if (!name) return
+    const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+
+    if (catDialog?.mode === 'new') {
+      const display_order = categories.length
+      const { data, error } = await supabase
+        .from('menu_categories')
+        .insert({ restaurant_id: restaurantId, name, slug, display_order })
+        .select()
+        .single()
+      if (error) { toast.error('Erro ao criar categoria: ' + error.message); return }
+      setCategories(prev => [...prev, data as MenuCategory])
+      setActiveCategory(data.id)
+    } else {
+      const catId = catDialog?.catId!
+      const { error } = await supabase
+        .from('menu_categories')
+        .update({ name, slug })
+        .eq('id', catId)
+      if (error) { toast.error('Erro ao renomear: ' + error.message); return }
+      setCategories(prev => prev.map(c => c.id === catId ? { ...c, name, slug } : c))
+    }
+    setCatDialog(null)
+  }
+
+  async function deleteCategory(catId: string) {
+    const hasItems = items.some(i => i.category_id === catId)
+    if (hasItems) {
+      toast.error('Remova todos os itens desta categoria antes de excluí-la')
+      return
+    }
+    const { error } = await supabase.from('menu_categories').delete().eq('id', catId)
+    if (error) { toast.error('Erro ao excluir: ' + error.message); return }
+    const next = categories.filter(c => c.id !== catId)
+    setCategories(next)
+    if (activeCategory === catId) setActiveCategory(next[0]?.id ?? '')
+    toast.success('Categoria removida')
+  }
 
   function openNew() {
     setEditing(null)
@@ -184,7 +226,7 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
                   className={`px-1.5 py-1.5 rounded-r-full text-sm transition-colors ${
                     activeCategory === cat.id ? 'bg-orange-400 text-white hover:bg-orange-300' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
-                  title="Configurar impressora"
+                  title="Opções da categoria"
                 >
                   <ChevronDown size={11} />
                 </button>
@@ -209,15 +251,41 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
                 >
                   Não definido
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setCatDialog({ mode: 'rename', catId: cat.id, value: cat.name })}>
+                  <Pencil size={13} className="mr-2" /> Renomear
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => deleteCategory(cat.id)}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <Trash2 size={13} className="mr-2" /> Excluir categoria
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         ))}
+
+        {/* Nova categoria */}
+        <button
+          onClick={() => setCatDialog({ mode: 'new', value: '' })}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
+        >
+          <FolderPlus size={14} /> Nova categoria
+        </button>
       </div>
 
-      <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600 text-white mb-4">
-        <Plus size={16} className="mr-1" /> Novo item
-      </Button>
+      {categories.length === 0 && (
+        <div className="text-center py-12 text-gray-400">
+          <p className="text-sm">Crie uma categoria para começar a cadastrar itens</p>
+        </div>
+      )}
+
+      {categories.length > 0 && (
+        <Button onClick={openNew} className="bg-orange-500 hover:bg-orange-600 text-white mb-4">
+          <Plus size={16} className="mr-1" /> Novo item
+        </Button>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredItems.map(item => (
@@ -257,6 +325,30 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
           </Card>
         ))}
       </div>
+
+      {/* Dialog: nova/renomear categoria */}
+      <Dialog open={!!catDialog} onOpenChange={v => { if (!v) setCatDialog(null) }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{catDialog?.mode === 'new' ? 'Nova categoria' : 'Renomear categoria'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label>Nome da categoria</Label>
+              <Input
+                autoFocus
+                value={catDialog?.value ?? ''}
+                onChange={e => setCatDialog(d => d ? { ...d, value: e.target.value } : d)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveCategory()}
+                placeholder="Ex: Lanches, Bebidas, Sobremesas..."
+              />
+            </div>
+            <Button onClick={handleSaveCategory} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+              {catDialog?.mode === 'new' ? 'Criar categoria' : 'Salvar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
