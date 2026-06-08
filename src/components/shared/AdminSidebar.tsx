@@ -32,10 +32,12 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
   const pathname = usePathname()
   const supabase = useRef(createClient()).current
   const [mesasBadge, setMesasBadge] = useState(0)
+  const [ordersBadge, setOrdersBadge] = useState(0)
 
-  // Limpa badge ao entrar em /admin/mesas
+  // Limpa badges ao entrar nas respectivas telas
   useEffect(() => {
     if (pathname === '/admin/mesas') setMesasBadge(0)
+    if (pathname === '/admin/pedidos') setOrdersBadge(0)
   }, [pathname])
 
   // Realtime: notifica quando cliente senta (status → occupied)
@@ -59,11 +61,47 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
               description: updated.guest_name ? `Cliente: ${updated.guest_name}` : undefined,
               icon: '🪑',
             })
-            // Só mostra badge se o gerente não estiver já na tela de mesas
-            if (pathname !== '/admin/mesas') {
-              setMesasBadge(n => n + 1)
-            }
+            if (pathname !== '/admin/mesas') setMesasBadge(n => n + 1)
           }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [restaurantId])
+
+  // Realtime: notifica quando chega novo pedido
+  useEffect(() => {
+    if (!restaurantId) return
+
+    const channel = supabase
+      .channel(`sidebar-orders-${restaurantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'comi',
+          table: 'orders',
+          filter: `restaurant_id=eq.${restaurantId}`,
+        },
+        async payload => {
+          const { data } = await supabase
+            .from('orders')
+            .select('code, table:tables(number), session:table_sessions(guest_name)')
+            .eq('id', (payload.new as { id: string }).id)
+            .single()
+
+          const order = data as { code: number | null; table?: { number: number }; session?: { guest_name: string } | null } | null
+          const tableNum = order?.table?.number
+          const guestName = order?.session?.guest_name
+          const code = order?.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
+
+          toast('🍽️ Novo pedido!', {
+            description: [tableNum && `Mesa ${tableNum}`, guestName, code].filter(Boolean).join(' · '),
+            duration: 8000,
+          })
+
+          if (pathname !== '/admin/pedidos') setOrdersBadge(n => n + 1)
         }
       )
       .subscribe()
@@ -73,7 +111,10 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
 
   const nav = baseNav.map(item => ({
     ...item,
-    badge: item.href === '/admin/mesas' && pathname !== '/admin/mesas' ? mesasBadge : 0,
+    badge:
+      item.href === '/admin/mesas' && pathname !== '/admin/mesas' ? mesasBadge :
+      item.href === '/admin/pedidos' && pathname !== '/admin/pedidos' ? ordersBadge :
+      0,
   }))
 
   return (

@@ -17,7 +17,7 @@ export default async function MesasAdminPage() {
 
   const { data: tables } = await supabase
     .from('tables')
-    .select('*, current_order:orders(id, total, status, order_items(id, quantity, menu_item:menu_items(name)))')
+    .select('*, current_order:orders(id, total, status, order_items(id, quantity, unit_price, menu_item:menu_items(name)))')
     .eq('restaurant_id', restaurantId)
     .eq('orders.status', 'open')
     .order('number')

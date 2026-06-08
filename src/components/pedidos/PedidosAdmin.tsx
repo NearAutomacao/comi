@@ -204,14 +204,15 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
 
       {payingGroup && (
         <PaymentModal
-          orderId={payingGroup.orders[0].id}
-          restaurantId={payingGroup.restaurantId}
+          tableId={payingGroup.tableId}
+          tableNum={payingGroup.tableNum}
+          orders={payingGroup.orders}
           total={payingGroup.total}
+          restaurantId={payingGroup.restaurantId}
           onClose={() => setPayingTableId(null)}
           onPaid={() => {
             setOrders(prev => prev.filter(o => o.table_id !== payingGroup.tableId))
             setPayingTableId(null)
-            toast.success('Mesa paga e encerrada!')
           }}
         />
       )}

@@ -50,7 +50,7 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
         // Busca o pedido completo com itens
         const { data: completeOrder } = await supabase
           .from('orders')
-          .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, menu_item:menu_items(name))')
+          .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
           .eq('id', newOrder.id)
           .single()
         // Atualiza mesa com current_order

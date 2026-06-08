@@ -21,16 +21,19 @@ export default function ClienteHeader({ userName }: Props) {
   const itemCount = useCartStore(s => s.itemCount())
   const tableNumber = useCartStore(s => s.tableNumber)
   const tableId = useCartStore(s => s.tableId)
+  const sessionId = useCartStore(s => s.sessionId)
   const clearSession = useCartStore(s => s.clearSession)
+  const setTable = useCartStore(s => s.setTable)
   const guestName = useCartStore(s => s.guestName)
   const displayName = userName || guestName || ''
   const supabase = useRef(createClient()).current
 
+  // Escuta status da mesa (ex: liberada pelo garçom)
   useEffect(() => {
     if (!tableId) return
 
     const channel = supabase
-      .channel(`table-session-${tableId}`)
+      .channel(`table-status-${tableId}`)
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'comi', table: 'tables', filter: `id=eq.${tableId}` },
@@ -47,6 +50,35 @@ export default function ClienteHeader({ userName }: Props) {
 
     return () => { supabase.removeChannel(channel) }
   }, [tableId])
+
+  // Escuta transferência de mesa: atualiza tableId/tableNumber no store
+  useEffect(() => {
+    if (!sessionId) return
+
+    const channel = supabase
+      .channel(`session-transfer-${sessionId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'comi', table: 'table_sessions', filter: `id=eq.${sessionId}` },
+        async payload => {
+          const updated = payload.new as { table_id: string }
+          if (updated.table_id && updated.table_id !== tableId) {
+            const { data: newTable } = await supabase
+              .from('tables')
+              .select('number')
+              .eq('id', updated.table_id)
+              .single()
+            if (newTable) {
+              setTable(updated.table_id, newTable.number)
+              toast.success(`Você foi transferido para a Mesa ${newTable.number}.`)
+            }
+          }
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [sessionId])
 
   const isGuest = !userName && !!guestName
 
