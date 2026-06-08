@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,56 +32,101 @@ type RichOrder = Order & {
   session?: { guest_name: string } | null
 }
 
-export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[] }) {
+async function fetchRichOrder(pb: ReturnType<typeof createClient>, orderId: string): Promise<RichOrder | null> {
+  try {
+    const order = await pb.collection('orders').getOne(orderId) as any
+    const [tableResult, sessionResult, orderItemsResult] = await Promise.allSettled([
+      order.table_id ? pb.collection('tables').getOne(order.table_id) : Promise.resolve(null),
+      order.session_id ? pb.collection('table_sessions').getOne(order.session_id) : Promise.resolve(null),
+      pb.collection('order_items').getList(1, 100, { filter: `order_id = "${orderId}"` }),
+    ])
+
+    const table = tableResult.status === 'fulfilled' ? tableResult.value : null
+    const session = sessionResult.status === 'fulfilled' ? sessionResult.value : null
+    const orderItemsList = orderItemsResult.status === 'fulfilled' ? (orderItemsResult.value as any).items : []
+
+    const enrichedItems = await Promise.all(
+      orderItemsList.map(async (item: any) => {
+        let menuItem: any = null
+        try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
+        return { ...item, menu_item: menuItem ? { name: menuItem.name, price: menuItem.price } : null }
+      })
+    )
+
+    return {
+      ...order,
+      table: table ? { number: (table as any).number } : undefined,
+      session: session ? { guest_name: (session as any).guest_name } : null,
+      order_items: enrichedItems,
+    } as RichOrder
+  } catch {
+    return null
+  }
+}
+
+export default function PedidosAdmin({ initialOrders, restaurantId }: { initialOrders: Order[]; restaurantId: string }) {
   const [orders, setOrders] = useState<RichOrder[]>(initialOrders as RichOrder[])
   const [payingTableId, setPayingTableId] = useState<string | null>(null)
-  const supabase = createClient()
+  const pbRef = useRef(createClient())
 
   useEffect(() => {
-    const channel = supabase
-      .channel('orders-admin')
-      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
-        const { data } = await supabase
-          .from('orders')
-          .select('*, table:tables(number), order_items(*, menu_item:menu_items(name, price)), session:table_sessions(guest_name)')
-          .eq('id', payload.new.id)
-          .single()
-        if (data) {
-          setOrders(prev => [...prev, data as RichOrder])
-        }
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {
-        const updated = payload.new as Order
+    const pb = pbRef.current
+    let unsubscribe: (() => void) | null = null
+
+    pb.collection('orders').subscribe('*', async event => {
+      if (event.action === 'create') {
+        const order = event.record as any
+        if (order.restaurant_id !== restaurantId) return
+        const rich = await fetchRichOrder(pb, order.id)
+        if (rich) setOrders(prev => [...prev, rich])
+      }
+      if (event.action === 'update') {
+        const updated = event.record as unknown as Order
         if (['closed', 'cancelled'].includes(updated.status)) {
           setOrders(prev => prev.filter(o => o.id !== updated.id))
         } else {
           setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
         }
-      })
-      .subscribe()
+      }
+    }, { filter: `restaurant_id = "${restaurantId}"` })
+      .then(unsub => { unsubscribe = unsub })
+      .catch(() => {})
 
-    return () => { supabase.removeChannel(channel) }
-  }, [])
+    return () => { unsubscribe?.() }
+  }, [restaurantId])
 
   async function updateStatus(orderId: string, status: OrderStatus) {
-    await supabase.from('orders').update({ status }).eq('id', orderId)
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o))
-    toast.success('Status atualizado')
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        toast.error(`Erro ao atualizar: ${data.error ?? res.statusText}`)
+        return
+      }
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o))
+      toast.success('Status atualizado')
+    } catch (err: any) {
+      toast.error('Erro ao atualizar status')
+      console.error('[updateStatus]', err)
+    }
   }
 
-  // Agrupa por mesa, ordenado por número
   const groups = useMemo(() => {
     const map = new Map<string, { tableNum: number; tableId: string; restaurantId: string; orders: RichOrder[] }>()
     for (const order of orders) {
       const key = order.table_id ?? 'sem-mesa'
-      if (!map.has(key)) map.set(key, { tableNum: order.table?.number ?? 0, tableId: key, restaurantId: order.restaurant_id ?? '', orders: [] })
+      if (!map.has(key)) map.set(key, { tableNum: order.table?.number ?? 0, tableId: key, restaurantId: order.restaurant_id ?? restaurantId, orders: [] })
       map.get(key)!.orders.push(order)
     }
     return [...map.values()]
       .sort((a, b) => a.tableNum - b.tableNum)
       .map(g => ({
         ...g,
-        orders: g.orders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+        orders: g.orders.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime()),
         total: g.orders.reduce((s, o) => s + (o.total ?? 0), 0),
         worstStatus: g.orders.reduce<OrderStatus>((worst, o) =>
           statusPriority[o.status] < statusPriority[worst] ? o.status : worst,
@@ -109,7 +154,6 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
           const ws = statusConfig[group.worstStatus]
           return (
             <div key={group.tableId} className="bg-white rounded-xl border shadow-sm overflow-hidden">
-              {/* Cabeçalho da mesa */}
               <div className="flex items-center justify-between px-4 py-3 bg-orange-50 border-b">
                 <span className="font-bold text-orange-700 text-lg">
                   Mesa {group.tableNum || '—'}
@@ -122,14 +166,12 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
                 </div>
               </div>
 
-              {/* Lista de pedidos */}
               <div className="divide-y">
                 {group.orders.map(order => {
                   const s = statusConfig[order.status]
                   const codeStr = order.code != null ? `#${String(order.code).padStart(3, '0')}` : null
                   return (
                     <div key={order.id} className="px-4 py-3 space-y-2">
-                      {/* Linha de meta: código, nome, horário, status */}
                       <div className="flex items-center justify-between text-xs text-gray-500">
                         <div className="flex items-center gap-2">
                           {codeStr && (
@@ -143,13 +185,12 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
                             </span>
                           )}
                           <span className="text-gray-400">
-                            {format(new Date(order.created_at), 'HH:mm', { locale: ptBR })}
+                            {format(new Date(order.created), 'HH:mm', { locale: ptBR })}
                           </span>
                         </div>
                         <Badge className={`${s.class} text-xs`} variant="outline">{s.label}</Badge>
                       </div>
 
-                      {/* Itens */}
                       <ul className="space-y-0.5">
                         {(order.order_items ?? []).map((item: { id: string; quantity: number; menu_item?: { name: string } }) => (
                           <li key={item.id} className="text-sm text-gray-700">
@@ -158,7 +199,6 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
                         ))}
                       </ul>
 
-                      {/* Total e status select */}
                       <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
                         <span className="font-semibold text-gray-700">{formatCurrency(order.total)}</span>
                         <Select value={order.status} onValueChange={v => updateStatus(order.id, v as OrderStatus)}>
@@ -179,7 +219,6 @@ export default function PedidosAdmin({ initialOrders }: { initialOrders: Order[]
 
               <Separator />
 
-              {/* Rodapé da mesa */}
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-sm font-bold text-gray-700">
                   Total: {formatCurrency(group.total)}

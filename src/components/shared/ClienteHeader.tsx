@@ -1,14 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { ShoppingCart, BookOpen, Calendar, ClipboardList, LogOut, MapPin, Receipt } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useCartStore } from '@/store/cartStore'
 import { signOut } from '@/app/actions/auth'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/pb/client'
 import { toast } from 'sonner'
 
 interface Props {
@@ -17,7 +17,6 @@ interface Props {
 
 export default function ClienteHeader({ userName }: Props) {
   const pathname = usePathname()
-  const router = useRouter()
   const itemCount = useCartStore(s => s.itemCount())
   const tableNumber = useCartStore(s => s.tableNumber)
   const tableId = useCartStore(s => s.tableId)
@@ -26,69 +25,59 @@ export default function ClienteHeader({ userName }: Props) {
   const setTable = useCartStore(s => s.setTable)
   const guestName = useCartStore(s => s.guestName)
   const displayName = userName || guestName || ''
-  const supabase = useRef(createClient()).current
+  const pbRef = useRef(createClient())
 
   // Escuta status da mesa (ex: liberada pelo garçom)
   useEffect(() => {
     if (!tableId) return
+    const pb = pbRef.current
 
-    const channel = supabase
-      .channel(`table-status-${tableId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'comi', table: 'tables', filter: `id=eq.${tableId}` },
-        payload => {
-          const updated = payload.new as { status: string }
-          if (updated.status === 'empty') {
-            // Aguarda 800ms antes de expulsar: se foi uma troca de mesa, o evento
-            // session-transfer chega nesse intervalo e atualiza tableId no store.
-            // Se tableId no store mudou = transferência → não expulsa.
-            // Se tableId no store ainda é o mesmo = mesa genuinamente liberada → expulsa.
-            setTimeout(() => {
-              const currentTableId = useCartStore.getState().tableId
-              if (!currentTableId || currentTableId !== tableId) return
-              clearSession()
-              if (pathname !== '/conta') {
-                toast.info('Sua mesa foi liberada pelo restaurante.')
-                router.push('/cardapio')
-              }
-            }, 800)
-          }
-        }
-      )
-      .subscribe()
+    let unsubscribe: (() => void) | null = null
+    pb.collection('tables').subscribe(tableId, event => {
+      if (event.action !== 'update') return
+      const updated = event.record
+      if (updated.status === 'empty') {
+        // 800ms de delay para não expulsar numa troca de mesa
+        setTimeout(() => {
+          const currentTableId = useCartStore.getState().tableId
+          if (!currentTableId || currentTableId !== tableId) return
+          clearSession()
+          toast.info('Sua mesa foi liberada pelo restaurante.')
+          window.location.href = 'https://comi.awplabs.com.br/'
+        }, 800)
+      }
+    })
+      .then(unsub => { unsubscribe = unsub })
+      .catch(() => {})
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { unsubscribe?.() }
   }, [tableId])
 
-  // Escuta transferência de mesa: atualiza tableId/tableNumber no store
+  // Escuta transferência de mesa
   useEffect(() => {
     if (!sessionId) return
+    const pb = pbRef.current
 
-    const channel = supabase
-      .channel(`session-transfer-${sessionId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'comi', table: 'table_sessions', filter: `id=eq.${sessionId}` },
-        async payload => {
-          const updated = payload.new as { table_id: string }
-          if (updated.table_id && updated.table_id !== tableId) {
-            const { data: newTable } = await supabase
-              .from('tables')
-              .select('number')
-              .eq('id', updated.table_id)
-              .single()
-            if (newTable) {
-              setTable(updated.table_id, newTable.number)
-              toast.success(`Você foi transferido para a Mesa ${newTable.number}.`)
-            }
-          }
-        }
-      )
-      .subscribe()
+    let unsubscribe: (() => void) | null = null
+    pb.collection('table_sessions').subscribe(sessionId, async event => {
+      if (event.action !== 'update') return
+      const updated = event.record
+      if (updated.table_id && updated.table_id !== tableId) {
+        try {
+          const newTable = await pb.collection('tables').getOne(updated.table_id)
+          setTable(updated.table_id, newTable.number)
+          toast.success(`Você foi transferido para a Mesa ${newTable.number}.`)
+        } catch {}
+      }
+    })
+      .then(unsub => { unsubscribe = unsub })
+      .catch(() => {})
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { unsubscribe?.() }
   }, [sessionId])
+
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   const isGuest = !userName && !!guestName
 
@@ -119,9 +108,7 @@ export default function ClienteHeader({ userName }: Props) {
               key={href}
               href={href}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                pathname.startsWith(href)
-                  ? 'bg-orange-50 text-orange-600'
-                  : 'text-gray-600 hover:bg-gray-100'
+                pathname.startsWith(href) ? 'bg-orange-50 text-orange-600' : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
               <Icon size={16} />
@@ -131,7 +118,6 @@ export default function ClienteHeader({ userName }: Props) {
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* Indicador de mesa + Fechar conta */}
           {tableNumber && (
             <div className="flex items-center gap-1">
               <div className="flex items-center gap-1 bg-orange-50 border border-orange-200 rounded-full px-3 py-1">
@@ -154,7 +140,7 @@ export default function ClienteHeader({ userName }: Props) {
           <Link href="/carrinho" className="relative">
             <Button variant="ghost" size="icon" className="relative">
               <ShoppingCart size={20} />
-              {itemCount > 0 && (
+              {mounted && itemCount > 0 && (
                 <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-orange-500">
                   {itemCount}
                 </Badge>
@@ -170,7 +156,7 @@ export default function ClienteHeader({ userName }: Props) {
               onClick={() => {
                 clearSession()
                 document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'
-                window.location.href = '/'
+                window.location.href = 'https://comi.awplabs.com.br/'
               }}
             >
               <LogOut size={18} />
@@ -185,7 +171,6 @@ export default function ClienteHeader({ userName }: Props) {
         </div>
       </div>
 
-      {/* Mobile nav */}
       <nav className="md:hidden border-t flex">
         {links.map(({ href, label, icon: Icon }) => (
           <Link
@@ -212,7 +197,6 @@ export default function ClienteHeader({ userName }: Props) {
         </Link>
       </nav>
 
-      {/* Banner de mesa no mobile */}
       {tableNumber && (
         <div className="md:hidden bg-orange-50 border-b border-orange-100 px-4 py-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1.5">

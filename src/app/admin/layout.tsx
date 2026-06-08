@@ -1,33 +1,41 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
+import { createAdminClient } from '@/lib/pb/server'
 import AdminSidebar from '@/components/shared/AdminSidebar'
+import AdminShell from '@/components/shared/AdminShell'
 import UpdateNotifier from '@/components/shared/UpdateNotifier'
 import ElectronBridge from '@/components/shared/ElectronBridge'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
 
-  if (!user) redirect('/login')
+  if (!session || session.role !== 'manager') redirect('/login')
 
-  // Busca perfil e restaurante juntos — comi.profiles é a fonte de verdade do role
-  const [{ data: profile }, { data: restaurant }] = await Promise.all([
-    supabase.from('profiles').select('role').eq('id', user.id).single(),
-    supabase.from('restaurants').select('id, name').eq('owner_id', user.id).single(),
-  ])
-
-  if (profile?.role !== 'manager') redirect('/login')
-
-  const managerName = user.user_metadata?.name ?? user.email ?? 'Gerente'
-  const restaurantName = restaurant?.name ?? 'Meu Restaurante'
-  const restaurantId = restaurant?.id ?? ''
+  // Busca nome atualizado do restaurante
+  let restaurantName = 'Meu Restaurante'
+  if (session.restaurantId) {
+    try {
+      const pb = createAdminClient()
+      const restaurant = await pb.collection('restaurants').getOne(session.restaurantId)
+      restaurantName = restaurant.name ?? restaurantName
+    } catch {}
+  }
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <AdminSidebar managerName={managerName} restaurantName={restaurantName} restaurantId={restaurantId} />
-      <main className="flex-1 overflow-auto">{children}</main>
+    <div className="flex h-dvh overflow-hidden bg-gray-100">
+      <AdminSidebar
+        managerName={session.name}
+        restaurantName={restaurantName}
+        restaurantId={session.restaurantId ?? ''}
+      />
+      <div className="flex flex-col flex-1 overflow-hidden">
+        <AdminShell>{children}</AdminShell>
+      </div>
       <UpdateNotifier />
-      <ElectronBridge restaurantId={restaurantId} />
+      <ElectronBridge restaurantId={session.restaurantId ?? ''} />
     </div>
   )
 }

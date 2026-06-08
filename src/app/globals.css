@@ -46,6 +46,8 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), sans-serif;
+  /* Desabilita o PTR nativo do Chrome/Android para não conflitar com o custom PTR */
+  overscroll-behavior-y: none;
 }
 
 .table-map-container {

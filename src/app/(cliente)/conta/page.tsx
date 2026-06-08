@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -27,8 +26,9 @@ interface ReceiptLine {
   price: number
 }
 
+const SITE_URL = 'https://comi.awplabs.com.br/'
+
 export default function ContaPage() {
-  const router = useRouter()
   const { tableId, tableNumber, clearSession } = useCartStore()
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -36,7 +36,7 @@ export default function ContaPage() {
   const [receipt, setReceipt] = useState<{ lines: ReceiptLine[]; total: number; tableNumber: number | null } | null>(null)
 
   useEffect(() => {
-    if (!tableId) { router.replace('/cardapio'); return }
+    if (!tableId) { window.location.href = SITE_URL; return }
 
     fetch(`/api/conta?tableId=${tableId}`)
       .then(r => r.json())
@@ -70,10 +70,10 @@ export default function ContaPage() {
       body: JSON.stringify({ tableId, skipPayment: true }),
     })
 
-    setReceipt({ lines, total, tableNumber })
     clearSession()
     document.cookie = 'mesa_session=; Max-Age=0; path=/'
     document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'
+    setReceipt({ lines, total, tableNumber })
   }
 
   // Tela de comprovante (após fechar aba)
@@ -102,7 +102,13 @@ export default function ContaPage() {
           </div>
         </div>
 
-        <p className="text-sm text-gray-500">Dirija-se ao caixa para efetuar o pagamento.</p>
+        <p className="text-sm text-gray-500 mb-6">Dirija-se ao caixa para efetuar o pagamento.</p>
+        <Button
+          onClick={() => { window.location.href = SITE_URL }}
+          className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+        >
+          Voltar ao site
+        </Button>
       </div>
     )
   }
@@ -119,8 +125,8 @@ export default function ContaPage() {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
         <p className="text-gray-400 text-lg">Nenhum pedido em aberto para esta mesa.</p>
-        <Button onClick={() => router.push('/cardapio')} className="mt-6 bg-orange-500 hover:bg-orange-600 text-white">
-          Ver cardápio
+        <Button onClick={() => { window.location.href = SITE_URL }} className="mt-6 bg-orange-500 hover:bg-orange-600 text-white">
+          Ir para o site
         </Button>
       </div>
     )
