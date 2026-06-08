@@ -7,7 +7,7 @@ export interface Profile {
   cpf: string | null
   role: UserRole
   restaurant_id: string | null
-  created_at: string
+  created: string
 }
 
 export interface Restaurant {
@@ -25,7 +25,7 @@ export interface Restaurant {
   printer_kitchen_port: number | null
   printer_bar_host: string | null
   printer_bar_port: number | null
-  created_at: string
+  created: string
 }
 
 export interface MenuCategory {
@@ -35,7 +35,7 @@ export interface MenuCategory {
   slug: string
   display_order: number
   printer: 'kitchen' | 'bar' | null
-  created_at: string
+  created: string
 }
 
 export interface CostItem {
@@ -57,7 +57,7 @@ export interface MenuItem {
   photo_url: string | null
   available: boolean
   display_order: number
-  created_at: string
+  created: string
   category?: MenuCategory
   cost_items?: CostItem[]
 }
@@ -74,7 +74,7 @@ export interface Table {
   status: TableStatus
   guest_name?: string | null
   guest_phone?: string | null
-  created_at: string
+  created: string
   current_order?: Order | null
 }
 
@@ -105,7 +105,7 @@ export interface ClosedDate {
 }
 
 export type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed'
-export type PaymentStatus = 'unpaid' | 'paid' | 'refunded'
+export type PaymentStatus = 'unpaid' | 'pending' | 'paid' | 'refunded'
 
 export interface Reservation {
   id: string
@@ -119,7 +119,7 @@ export interface Reservation {
   payment_status: PaymentStatus
   payment_id: string | null
   notes: string | null
-  created_at: string
+  created: string
   table?: Table
   customer?: Profile
 }
@@ -148,7 +148,7 @@ export interface Order {
   status: OrderStatus
   total: number
   payment_status: PaymentStatus
-  created_at: string
+  created: string
   table?: Table
   customer?: Profile
   session?: TableSession
@@ -167,7 +167,7 @@ export interface Payment {
   status: PaymentStatus
   mercadopago_id: string | null
   installments: number
-  created_at: string
+  created: string
 }
 
 export interface PaymentPerson {
@@ -193,7 +193,7 @@ export interface PrintJob {
   table_number: number | null
   guest_name: string | null
   order_code: number | null
-  created_at: string
+  created: string
   printed_at: string | null
 }
 
@@ -208,7 +208,7 @@ export interface Subscription {
   starts_at: string
   expires_at: string | null
   mp_preapproval_id: string | null
-  created_at: string
+  created: string
 }
 
 export interface TableColor {

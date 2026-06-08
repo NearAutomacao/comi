@@ -1,17 +1,11 @@
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/pb/server'
 
 async function getMPClientForRestaurant(restaurantId: string) {
-  const supabase = await createAdminClient()
-  const { data } = await supabase
-    .from('restaurants')
-    .select('mp_access_token')
-    .eq('id', restaurantId)
-    .single()
-
-  const token = data?.mp_access_token
+  const pb = createAdminClient()
+  const restaurant = await pb.collection('restaurants').getOne(restaurantId)
+  const token = restaurant?.mp_access_token
   if (!token) throw new Error('MercadoPago não conectado. Configure em Admin → Configurações.')
-
   return new MercadoPagoConfig({ accessToken: token })
 }
 

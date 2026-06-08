@@ -1,19 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
 import ClienteHeader from '@/components/shared/ClienteHeader'
 
 export default async function ClienteLayout({ children }: { children: React.ReactNode }) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
 
-  let userName = ''
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('name')
-      .eq('id', user.id)
-      .single()
-    userName = profile?.name ?? ''
-  }
+  const userName = session?.name ?? ''
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

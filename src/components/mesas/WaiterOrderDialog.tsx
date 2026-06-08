@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@/lib/pb/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,16 +25,26 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
   const [cart, setCart] = useState<CartEntry[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(false)
-  const supabase = createClient()
+  const pbRef = useRef(createClient())
 
   useEffect(() => {
-    supabase
-      .from('menu_items')
-      .select('*, category:menu_categories(name)')
-      .eq('restaurant_id', restaurantId)
-      .eq('available', true)
-      .order('display_order')
-      .then(({ data }) => setMenuItems(data ?? []))
+    const pb = pbRef.current
+    pb.collection('menu_items').getList(1, 500, {
+      filter: `restaurant_id = "${restaurantId}" && available = true`,
+      sort: 'display_order',
+    }).then(async ({ items }) => {
+      // Enriquece com categoria
+      const withCategory = await Promise.all(
+        items.map(async (item: any) => {
+          let category: any = null
+          if (item.category_id) {
+            try { category = await pb.collection('menu_categories').getOne(item.category_id) } catch {}
+          }
+          return { ...item, category }
+        })
+      )
+      setMenuItems(withCategory as unknown as MenuItem[])
+    }).catch(() => {})
   }, [restaurantId])
 
   function addToCart(item: MenuItem) {
@@ -51,27 +61,28 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
   }
 
   const total = cart.reduce((s, e) => s + e.item.price * e.qty, 0)
-
-  const filtered = menuItems.filter(i =>
-    i.name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = menuItems.filter(i => i.name.toLowerCase().includes(search.toLowerCase()))
 
   async function handleSend() {
     if (cart.length === 0) return
     setLoading(true)
 
-    // Quando há pedido existente (adicionando itens), insere direto nos order_items
     if (existingOrderId) {
-      const { error: itemsError } = await supabase.from('order_items').insert(
-        cart.map(e => ({
-          restaurant_id: restaurantId,
-          order_id: existingOrderId,
-          menu_item_id: e.item.id,
-          quantity: e.qty,
-          unit_price: e.item.price,
-        }))
-      )
-      if (itemsError) {
+      // Adicionar itens a pedido existente via API
+      const res = await fetch('/api/orders/items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId: existingOrderId,
+          restaurantId,
+          items: cart.map(e => ({
+            menuItemId: e.item.id,
+            quantity: e.qty,
+            unitPrice: e.item.price,
+          })),
+        }),
+      })
+      if (!res.ok) {
         toast.error('Erro ao adicionar itens')
         setLoading(false)
         return
@@ -82,27 +93,21 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
       return
     }
 
-    // Novo pedido: usa a API para garantir order_code sequencial e print_jobs
+    // Novo pedido
     const res = await fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         tableId,
-        items: cart.map(e => ({
-          menuItemId: e.item.id,
-          quantity: e.qty,
-          unitPrice: e.item.price,
-        })),
+        items: cart.map(e => ({ menuItemId: e.item.id, quantity: e.qty, unitPrice: e.item.price })),
       }),
     })
-
     if (!res.ok) {
       const data = await res.json().catch(() => ({ error: 'Erro desconhecido' }))
       toast.error('Erro ao criar pedido: ' + data.error)
       setLoading(false)
       return
     }
-
     const { orderId } = await res.json()
     toast.success('Pedido lançado!')
     onSent(orderId, total)
@@ -116,18 +121,11 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
           <DialogTitle>Lançar pedido</DialogTitle>
         </DialogHeader>
 
-        {/* Busca */}
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Buscar item..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9"
-          />
+          <Input placeholder="Buscar item..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
 
-        {/* Lista de itens */}
         <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
           {filtered.map(item => {
             const entry = cart.find(e => e.item.id === item.id)
@@ -139,25 +137,16 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
                 </div>
                 {entry ? (
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={() => updateQty(item.id, entry.qty - 1)}
-                      className="w-7 h-7 rounded-full border border-orange-300 text-orange-600 flex items-center justify-center"
-                    >
+                    <button onClick={() => updateQty(item.id, entry.qty - 1)} className="w-7 h-7 rounded-full border border-orange-300 text-orange-600 flex items-center justify-center">
                       <Minus size={13} />
                     </button>
                     <span className="w-4 text-center text-sm font-bold">{entry.qty}</span>
-                    <button
-                      onClick={() => updateQty(item.id, entry.qty + 1)}
-                      className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center"
-                    >
+                    <button onClick={() => updateQty(item.id, entry.qty + 1)} className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center">
                       <Plus size={13} />
                     </button>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => addToCart(item)}
-                    className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center flex-shrink-0"
-                  >
+                  <button onClick={() => addToCart(item)} className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center flex-shrink-0">
                     <Plus size={13} />
                   </button>
                 )}
@@ -166,18 +155,13 @@ export default function WaiterOrderDialog({ tableId, restaurantId, existingOrder
           })}
         </div>
 
-        {/* Rodapé */}
         {cart.length > 0 && (
           <div className="border-t pt-3 space-y-2">
             <div className="flex justify-between text-sm font-bold">
               <span>{cart.reduce((s, e) => s + e.qty, 0)} itens</span>
               <span className="text-orange-600">{formatCurrency(total)}</span>
             </div>
-            <Button
-              onClick={handleSend}
-              disabled={loading}
-              className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-            >
+            <Button onClick={handleSend} disabled={loading} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
               <Send size={16} className="mr-2" />
               {loading ? 'Enviando...' : 'Enviar pedido'}
             </Button>

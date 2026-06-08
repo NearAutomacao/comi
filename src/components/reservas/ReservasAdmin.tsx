@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useRef } from 'react'
+import { createClient } from '@/lib/pb/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -32,10 +32,10 @@ const statusMap: Record<ReservationStatus, { label: string; class: string }> = {
 
 export default function ReservasAdmin({ initialReservations }: { initialReservations: Reservation[] }) {
   const [reservations, setReservations] = useState(initialReservations)
-  const supabase = createClient()
+  const pbRef = useRef(createClient())
 
   async function updateStatus(id: string, status: ReservationStatus) {
-    await supabase.from('reservations').update({ status }).eq('id', id)
+    await pbRef.current.collection('reservations').update(id, { status })
     setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r))
     toast.success('Status atualizado')
   }

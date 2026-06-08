@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Calendar, Clock, Users } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/pb/client'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
@@ -44,6 +44,8 @@ export default function ReservasClient({ userId, restaurantId, tables, workingHo
   const [guests, setGuests] = useState('2')
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [reservations, setReservations] = useState(myReservations)
+  const pbRef = useRef(createClient())
 
   function isDateAllowed(dateStr: string): boolean {
     if (closedDates.includes(dateStr)) return false
@@ -61,11 +63,11 @@ export default function ReservasClient({ userId, restaurantId, tables, workingHo
     }
 
     setLoading(true)
-    const supabase = createClient()
+    const pb = pbRef.current
 
-    const { data: reservation, error } = await supabase
-      .from('reservations')
-      .insert({
+    let reservation: any
+    try {
+      reservation = await pb.collection('reservations').create({
         restaurant_id: restaurantId,
         table_id: tableId,
         customer_id: userId,
@@ -76,11 +78,8 @@ export default function ReservasClient({ userId, restaurantId, tables, workingHo
         status: 'pending',
         payment_status: 'unpaid',
       })
-      .select()
-      .single()
-
-    if (error) {
-      toast.error('Erro ao criar reserva')
+    } catch (err: any) {
+      toast.error('Erro ao criar reserva: ' + (err?.message ?? 'Desconhecido'))
       setLoading(false)
       return
     }
@@ -98,7 +97,7 @@ export default function ReservasClient({ userId, restaurantId, tables, workingHo
     } else {
       toast.success('Reserva criada! Aguardando confirmação de pagamento.')
       setLoading(false)
-      window.location.reload()
+      setReservations(prev => [{ ...reservation, table: tables.find(t => t.id === tableId) ?? null }, ...prev])
     }
   }
 
@@ -198,11 +197,11 @@ export default function ReservasClient({ userId, restaurantId, tables, workingHo
       </Card>
 
       <h2 className="text-lg font-semibold mb-4">Minhas reservas</h2>
-      {myReservations.length === 0 ? (
+      {reservations.length === 0 ? (
         <p className="text-gray-400 text-center py-8">Nenhuma reserva ainda</p>
       ) : (
         <div className="space-y-3">
-          {myReservations.map(r => {
+          {reservations.map(r => {
             const s = statusMap[r.status] ?? statusMap.pending
             return (
               <Card key={r.id} className="shadow-sm">

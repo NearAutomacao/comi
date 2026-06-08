@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/pb/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,6 +22,7 @@ interface Props {
 export default function ConfiguracoesClient({ restaurant, initialHours, initialClosedDates }: Props) {
   const searchParams = useSearchParams()
   const mpStatus = searchParams.get('mp')
+  const pbRef = useRef(createClient())
 
   const [restaurantName, setRestaurantName] = useState(restaurant?.name ?? '')
   const [hours, setHours] = useState(initialHours)
@@ -32,66 +33,63 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
   const [kitchenPort, setKitchenPort] = useState(String(restaurant?.printer_kitchen_port ?? 9100))
   const [barHost, setBarHost] = useState(restaurant?.printer_bar_host ?? '')
   const [barPort, setBarPort] = useState(String(restaurant?.printer_bar_port ?? 9100))
-  const supabase = createClient()
 
   const mpConnected = !!restaurant?.mp_access_token
 
   async function saveRestaurantName() {
     if (!restaurant?.id) return
-    await supabase.from('restaurants').update({ name: restaurantName }).eq('id', restaurant.id)
+    await pbRef.current.collection('restaurants').update(restaurant.id, { name: restaurantName })
     toast.success('Nome atualizado')
   }
 
   async function updateHours(hour: WorkingHours, field: keyof WorkingHours, value: string | boolean) {
-    await supabase.from('working_hours').update({ [field]: value }).eq('id', hour.id)
+    await pbRef.current.collection('working_hours').update(hour.id, { [field]: value })
     setHours(prev => prev.map(h => h.id === hour.id ? { ...h, [field]: value } : h))
   }
 
   async function addClosedDate() {
     if (!newDate || !restaurant?.id) return
-    const { data } = await supabase
-      .from('closed_dates')
-      .insert({ restaurant_id: restaurant.id, date: newDate, reason: newDateReason || null })
-      .select().single()
-    if (data) {
-      setClosedDates(prev => [...prev, data as ClosedDate].sort((a, b) => a.date.localeCompare(b.date)))
-      setNewDate('')
-      setNewDateReason('')
-      toast.success('Data adicionada')
-    }
+    const data = await pbRef.current.collection('closed_dates').create({
+      restaurant_id: restaurant.id,
+      date: newDate,
+      reason: newDateReason || null,
+    })
+    setClosedDates(prev => [...prev, data as unknown as ClosedDate].sort((a, b) => a.date.localeCompare(b.date)))
+    setNewDate('')
+    setNewDateReason('')
+    toast.success('Data adicionada')
   }
 
   async function removeClosedDate(id: string) {
-    await supabase.from('closed_dates').delete().eq('id', id)
+    await pbRef.current.collection('closed_dates').delete(id)
     setClosedDates(prev => prev.filter(d => d.id !== id))
   }
 
   async function savePrinters() {
     if (!restaurant?.id) return
-    await supabase.from('restaurants').update({
+    await pbRef.current.collection('restaurants').update(restaurant.id, {
       printer_kitchen_host: kitchenHost || null,
       printer_kitchen_port: parseInt(kitchenPort) || 9100,
       printer_bar_host: barHost || null,
       printer_bar_port: parseInt(barPort) || 9100,
-    }).eq('id', restaurant.id)
+    })
     toast.success('Impressoras salvas')
   }
 
   async function disconnectMP() {
     if (!restaurant?.id) return
-    await supabase.from('restaurants').update({
+    await pbRef.current.collection('restaurants').update(restaurant.id, {
       mp_access_token: null,
       mp_refresh_token: null,
       mp_public_key: null,
       mp_user_id: null,
-    }).eq('id', restaurant.id)
+    })
     toast.success('MercadoPago desconectado')
     window.location.reload()
   }
 
   return (
     <div className="space-y-6 max-w-2xl">
-      {/* Geral */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -111,7 +109,6 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
         </CardContent>
       </Card>
 
-      {/* MercadoPago OAuth */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -167,7 +164,6 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
         </CardContent>
       </Card>
 
-      {/* Horários */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -192,7 +188,6 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
         </CardContent>
       </Card>
 
-      {/* Datas fechadas */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -221,7 +216,6 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
         </CardContent>
       </Card>
 
-      {/* Impressoras */}
       <Card className="shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">

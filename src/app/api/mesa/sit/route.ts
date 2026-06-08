@@ -1,7 +1,6 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/pb/server'
 import { createMesaSessionToken } from '@/lib/mesa-session'
 import { NextResponse } from 'next/server'
-import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(req: Request) {
   const { tableId, guestName, guestPhone } = await req.json()
@@ -11,39 +10,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'tableId e nome são obrigatórios' }, { status: 400 })
   }
 
-  const admin = await createAdminClient()
+  const pb = createAdminClient()
 
-  const { data: table, error } = await admin
-    .from('tables')
-    .select('id, number, restaurant_id, status, guest_name, guest_phone')
-    .eq('id', tableId)
-    .single()
-
-  if (error || !table) {
+  let table: any
+  try {
+    table = await pb.collection('tables').getOne(tableId)
+  } catch {
     return NextResponse.json({ error: 'Mesa não encontrada' }, { status: 404 })
   }
 
   const isJoining = table.status === 'occupied'
 
-  // Primeira pessoa: precisa de telefone e marca a mesa como ocupada
   if (!isJoining) {
     if (!guestPhone?.trim()) {
       return NextResponse.json({ error: 'Telefone é obrigatório para sentar' }, { status: 400 })
     }
-    await admin
-      .from('tables')
-      .update({
-        status: 'occupied',
-        guest_name: guestName.trim(),
-        guest_phone: guestPhone.trim(),
-      })
-      .eq('id', tableId)
+    await pb.collection('tables').update(tableId, {
+      status: 'occupied',
+      guest_name: guestName.trim(),
+      guest_phone: guestPhone.trim(),
+    })
   }
 
-  // Cria sessão individual (sempre — seja primeiro ou se juntando)
-  const sessionId = uuidv4()
-  await admin.from('table_sessions').insert({
-    id: sessionId,
+  // Cria sessão individual (PocketBase gera o ID automaticamente)
+  const session = await pb.collection('table_sessions').create({
     restaurant_id: table.restaurant_id,
     table_id: tableId,
     guest_name: guestName.trim(),
@@ -52,7 +42,7 @@ export async function POST(req: Request) {
 
   const token = await createMesaSessionToken({
     tableId,
-    sessionId,
+    sessionId: session.id,
     guestName: guestName.trim(),
     guestPhone: guestPhone?.trim() ?? '',
     restaurantId: table.restaurant_id,
@@ -62,7 +52,7 @@ export async function POST(req: Request) {
     ok: true,
     tableNumber: table.number,
     restaurantId: table.restaurant_id,
-    sessionId,
+    sessionId: session.id,
     isJoining,
   })
 

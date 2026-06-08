@@ -1,4 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
+import { createAdminClient } from '@/lib/pb/server'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Package } from 'lucide-react'
@@ -13,46 +16,68 @@ export default async function EstoquePage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>
 }) {
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
+  if (!session || session.role !== 'manager') redirect('/login')
+
+  const restaurantId = session.restaurantId ?? ''
   const { from, to } = await searchParams
   const today = brazilToday()
   const fromDate = from || today
   const toDate = (to && to >= fromDate) ? to : fromDate
 
-  const supabase = await createClient()
-
-  // Use timezone-aware ISO timestamps so Supabase compares against Brazil time (UTC-3)
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('order_items(quantity, menu_item_id, menu_item:menu_items(name, price, cost_items(*)))')
-    .gte('created_at', `${fromDate}T00:00:00-03:00`)
-    .lte('created_at', `${toDate}T23:59:59-03:00`)
-    .neq('status', 'cancelled')
-
+  const pb = createAdminClient()
   const costMap = new Map<string, { name: string; qty: number; revenue: number; cost: number }>()
 
-  for (const order of orders ?? []) {
-    for (const item of ((order.order_items ?? []) as unknown as {
-      quantity: number
-      menu_item_id: string
-      menu_item: { name: string; price: number; cost_items: { unit_cost: number }[] }
-    }[])) {
-      const mi = item.menu_item
-      if (!mi) continue
-      const itemCost = (mi.cost_items ?? []).reduce((s: number, c: { unit_cost: number }) => s + c.unit_cost, 0)
-      const existing = costMap.get(item.menu_item_id)
-      if (existing) {
-        existing.qty += item.quantity
-        existing.revenue += mi.price * item.quantity
-        existing.cost += itemCost * item.quantity
-      } else {
-        costMap.set(item.menu_item_id, {
-          name: mi.name,
-          qty: item.quantity,
-          revenue: mi.price * item.quantity,
-          cost: itemCost * item.quantity,
+  if (restaurantId) {
+    try {
+      // Fetch orders in date range (PocketBase uses ISO timestamps for filtering)
+      const fromTs = `${fromDate}T03:00:00.000Z` // UTC equivalent of Brazil midnight (UTC-3)
+      const toTs = `${toDate}T02:59:59.000Z`     // UTC equivalent of Brazil end-of-day
+
+      // PocketBase date filter: use string comparison on created field
+      const { items: orders } = await pb.collection('orders').getList(1, 2000, {
+        filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && created >= "${fromDate} 00:00:00" && created <= "${toDate} 23:59:59"`,
+      })
+
+      for (const order of orders) {
+        const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
+          filter: `order_id = "${order.id}"`,
         })
+
+        for (const item of orderItems as any[]) {
+          let menuItem: any = null
+          let costItems: any[] = []
+
+          try {
+            menuItem = await pb.collection('menu_items').getOne(item.menu_item_id)
+          } catch { continue }
+
+          try {
+            const { items: ci } = await pb.collection('cost_items').getList(1, 50, {
+              filter: `menu_item_id = "${item.menu_item_id}"`,
+            })
+            costItems = ci
+          } catch {}
+
+          const itemCost = costItems.reduce((s: number, c: any) => s + (c.unit_cost ?? 0), 0)
+          const existing = costMap.get(item.menu_item_id)
+          if (existing) {
+            existing.qty += item.quantity
+            existing.revenue += menuItem.price * item.quantity
+            existing.cost += itemCost * item.quantity
+          } else {
+            costMap.set(item.menu_item_id, {
+              name: menuItem.name,
+              qty: item.quantity,
+              revenue: menuItem.price * item.quantity,
+              cost: itemCost * item.quantity,
+            })
+          }
+        }
       }
-    }
+    } catch {}
   }
 
   const rows = Array.from(costMap.values()).sort((a, b) => b.qty - a.qty)

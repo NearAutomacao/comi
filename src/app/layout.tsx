@@ -34,17 +34,23 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full`}>
         {children}
         <Toaster richColors position="top-right" />
-        <Script id="sw-register" strategy="afterInteractive">{`
-          if ('serviceWorker' in navigator) {
-            const h = window.location.hostname
-            const isLocal = h === 'localhost' || /^(192\\.168\\.|10\\.|172\\.(1[6-9]|2\\d|3[01])\\.)/.test(h)
-            if (!isLocal) {
-              navigator.serviceWorker.register('/sw.js')
-            } else {
-              navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()))
-            }
-          }
-        `}</Script>
+        <Script
+          id="sw-register"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                const h = window.location.hostname
+                const isLocal = h === 'localhost' || /^(192\\.168\\.|10\\.|172\\.(1[6-9]|2\\d|3[01])\\.)/.test(h)
+                if (!isLocal) {
+                  navigator.serviceWorker.register('/sw.js')
+                } else {
+                  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()))
+                }
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   )

@@ -1,32 +1,46 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
+import { createAdminClient } from '@/lib/pb/server'
 import CardapioAdmin from '@/components/cardapio/CardapioAdmin'
 
 export default async function CardapioAdminPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
+  if (!session) redirect('/login')
 
-  const { data: restaurant } = await supabase
-    .from('restaurants')
-    .select('id')
-    .eq('owner_id', user.id)
-    .single()
+  const restaurantId = session.restaurantId ?? ''
+  const pb = createAdminClient()
 
-  const restaurantId = restaurant?.id ?? ''
-
-  const [{ data: categories }, { data: items }] = await Promise.all([
-    supabase.from('menu_categories').select('*').eq('restaurant_id', restaurantId).order('display_order'),
-    supabase.from('menu_items').select('*, cost_items(*)').eq('restaurant_id', restaurantId).order('display_order'),
+  const [{ items: categories }, { items: items }] = await Promise.all([
+    pb.collection('menu_categories').getList(1, 100, {
+      filter: `restaurant_id = "${restaurantId}"`,
+      sort: 'display_order',
+    }),
+    pb.collection('menu_items').getList(1, 500, {
+      filter: `restaurant_id = "${restaurantId}"`,
+      sort: 'display_order',
+    }),
   ])
+
+  // Busca cost_items para cada menu_item
+  const itemsWithCosts = await Promise.all(
+    items.map(async (item: any) => {
+      const { items: costItems } = await pb.collection('cost_items').getList(1, 50, {
+        filter: `menu_item_id = "${item.id}"`,
+      })
+      return { ...item, cost_items: costItems }
+    })
+  )
 
   return (
     <div className="p-4 md:p-6 mt-14 md:mt-0">
       <h1 className="text-2xl font-bold mb-6">Cardápio</h1>
       <CardapioAdmin
         restaurantId={restaurantId}
-        initialCategories={categories ?? []}
-        initialItems={items ?? []}
+        initialCategories={categories as any}
+        initialItems={itemsWithCosts}
       />
     </div>
   )

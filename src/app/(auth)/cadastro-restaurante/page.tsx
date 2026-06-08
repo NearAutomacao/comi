@@ -42,6 +42,8 @@ export default function CadastroRestaurantePage() {
     if (result?.error) {
       setError(result.error)
       setLoading(false)
+    } else if (result?.redirectTo) {
+      window.location.href = result.redirectTo
     }
   }
 
@@ -101,7 +103,7 @@ export default function CadastroRestaurantePage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="password">Senha</Label>
-                <Input id="password" name="password" type="password" required minLength={6} />
+                <Input id="password" name="password" type="password" required minLength={8} />
               </div>
               {error && <p className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</p>}
               <Button type="submit" disabled={loading} className="w-full bg-orange-500 hover:bg-orange-600 text-white py-5 mt-2">

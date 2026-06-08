@@ -1,42 +1,48 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
+import { createAdminClient } from '@/lib/pb/server'
 import DashboardClient from './DashboardClient'
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
+  if (!session) redirect('/login')
 
-  const { data: restaurant } = await supabase
-    .from('restaurants')
-    .select('id')
-    .eq('owner_id', user.id)
-    .single()
-
-  const restaurantId = restaurant?.id ?? ''
+  const restaurantId = session.restaurantId ?? ''
+  const pb = createAdminClient()
 
   const today = new Date().toISOString().split('T')[0]
 
   const [
-    { data: todayOrders },
-    { data: occupiedTables },
-    { data: pendingReservations },
-    { data: totalTables },
+    { items: todayOrders },
+    { items: occupiedTables },
+    { items: pendingReservations },
+    { items: totalTables },
   ] = await Promise.all([
-    supabase.from('orders').select('id, total, status').eq('restaurant_id', restaurantId).gte('created_at', today).neq('status', 'cancelled'),
-    supabase.from('tables').select('id').eq('restaurant_id', restaurantId).eq('status', 'occupied'),
-    supabase.from('reservations').select('id').eq('restaurant_id', restaurantId).eq('date', today).in('status', ['pending', 'confirmed']),
-    supabase.from('tables').select('id').eq('restaurant_id', restaurantId),
+    pb.collection('orders').getList(1, 500, {
+      filter: `restaurant_id = "${restaurantId}" && created >= "${today} 00:00:00" && status != "cancelled"`,
+    }),
+    pb.collection('tables').getList(1, 100, {
+      filter: `restaurant_id = "${restaurantId}" && status = "occupied"`,
+    }),
+    pb.collection('reservations').getList(1, 100, {
+      filter: `restaurant_id = "${restaurantId}" && date = "${today}" && (status = "pending" || status = "confirmed")`,
+    }),
+    pb.collection('tables').getList(1, 100, {
+      filter: `restaurant_id = "${restaurantId}"`,
+    }),
   ])
 
   return (
     <DashboardClient
       restaurantId={restaurantId}
-      initialRevenue={(todayOrders ?? []).reduce((s, o) => s + Number(o.total), 0)}
-      initialOrders={todayOrders?.length ?? 0}
-      initialOccupied={occupiedTables?.length ?? 0}
-      initialTotal={totalTables?.length ?? 0}
-      initialReservations={pendingReservations?.length ?? 0}
+      initialRevenue={todayOrders.reduce((s: number, o: any) => s + Number(o.total), 0)}
+      initialOrders={todayOrders.length}
+      initialOccupied={occupiedTables.length}
+      initialTotal={totalTables.length}
+      initialReservations={pendingReservations.length}
     />
   )
 }

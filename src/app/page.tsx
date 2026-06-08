@@ -1,5 +1,6 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
 import { ComiLandingPage } from '@/components/ComiLandingPage'
 
 export const metadata = {
@@ -11,14 +12,11 @@ export const metadata = {
 }
 
 export default async function HomePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
 
-  if (user) {
-    const role = user.app_metadata?.role ?? user.user_metadata?.role
-    if (role === 'manager') redirect('/admin/dashboard')
-    // Clientes chegam ao cardápio pelo QR code da mesa, não pelo login direto
-  }
+  if (session?.role === 'manager') redirect('/admin/dashboard')
 
   return <ComiLandingPage />
 }

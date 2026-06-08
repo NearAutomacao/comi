@@ -1,46 +1,65 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import { NextResponse } from 'next/server'
 
 // GET /api/conta?tableId=xxx
-// Retorna pedidos abertos da mesa com informações de sessão (comanda por pessoa)
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const tableId = searchParams.get('tableId')
   if (!tableId) return NextResponse.json({ error: 'tableId required' }, { status: 400 })
 
-  const admin = await createAdminClient()
+  const pb = createAdminClient()
 
-  const { data: orders, error } = await admin
-    .from('orders')
-    .select(`
-      id, total, status, created_at, restaurant_id, code, session_id,
-      order_items(id, quantity, unit_price, notes, menu_item:menu_items(name))
-    `)
-    .eq('table_id', tableId)
-    .in('status', ['open', 'preparing', 'served'])
-    .order('created_at', { ascending: true })
+  const { items: orders } = await pb.collection('orders').getList(1, 50, {
+    filter: `table_id = "${tableId}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
+    sort: 'created',
+  })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Busca itens de cada pedido
+  const ordersWithItems = await Promise.all(
+    orders.map(async (order: any) => {
+      const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
+        filter: `order_id = "${order.id}"`,
+      })
+      const enrichedItems = await Promise.all(
+        orderItems.map(async (item: any) => {
+          let menuItem: any = null
+          try {
+            menuItem = await pb.collection('menu_items').getOne(item.menu_item_id)
+          } catch {}
+          return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+        })
+      )
+      return { ...order, order_items: enrichedItems }
+    })
+  )
 
-  // Busca nomes das sessões para montar visão "por comanda"
-  const sessionIds = [...new Set((orders ?? []).map(o => o.session_id).filter(Boolean))]
+  // Busca nomes das sessões
+  const sessionIds = [...new Set(orders.map((o: any) => o.session_id).filter(Boolean))] as string[]
   let sessions: { id: string; guest_name: string }[] = []
   if (sessionIds.length > 0) {
-    const { data } = await admin
-      .from('table_sessions')
-      .select('id, guest_name')
-      .in('id', sessionIds)
-    sessions = data ?? []
+    const { items } = await pb.collection('table_sessions').getList(1, 50, {
+      filter: inFilter('id', sessionIds),
+    })
+    sessions = items.map((s: any) => ({ id: s.id, guest_name: s.guest_name }))
   }
 
-  return NextResponse.json({ orders: orders ?? [], sessions })
+  return NextResponse.json({ orders: ordersWithItems, sessions })
 }
 
 // POST /api/conta
-// Fecha pedidos e libera mesa.
-// skipPayment=true: pagamento no caixa, não registra payment record.
-// skipPayment=false (padrão): registra payments normalmente.
 export async function POST(req: Request) {
+  try {
+    return await handlePost(req)
+  } catch (err: any) {
+    console.error('[POST /api/conta] erro:', err?.message, err?.data)
+    const detail = err?.data?.data
+      ? Object.entries(err.data.data).map(([k, v]: any) => `${k}: ${v?.message}`).join(', ')
+      : null
+    return NextResponse.json({ error: detail ?? err?.data?.message ?? err?.message ?? 'Erro interno' }, { status: 500 })
+  }
+}
+
+async function handlePost(req: Request) {
   const body = await req.json()
   const { tableId, payments, skipPayment } = body as {
     tableId: string
@@ -60,64 +79,62 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'payments é obrigatório quando skipPayment não é true' }, { status: 400 })
   }
 
-  const admin = await createAdminClient()
+  const pb = createAdminClient()
 
-  // Registra pagamentos (só quando não for pagamento no caixa)
+  // Registra pagamentos
   if (!skipPayment && payments?.length) {
-    const { error: payError } = await admin.from('payments').insert(
-      payments.map(p => ({
+    for (const p of payments) {
+      await pb.collection('payments').create({
         restaurant_id: p.restaurant_id,
         order_id: p.order_id,
         method: p.method,
         amount: p.amount,
         status: 'approved',
         installments: 1,
-      }))
-    )
-    if (payError) return NextResponse.json({ error: payError.message }, { status: 500 })
+      })
+    }
   }
 
-  // Fecha os pedidos: se skipPayment, fecha todos da mesa; senão fecha só os enviados
+  // Determina quais pedidos fechar
   let orderIds: string[]
   if (skipPayment) {
-    const { data: openOrders } = await admin
-      .from('orders')
-      .select('id')
-      .eq('table_id', tableId)
-      .in('status', ['open', 'preparing', 'served'])
-    orderIds = (openOrders ?? []).map(o => o.id)
+    const { items: openOrders } = await pb.collection('orders').getList(1, 50, {
+      filter: `table_id = "${tableId}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
+    })
+    orderIds = openOrders.map((o: any) => o.id)
   } else {
     orderIds = [...new Set((payments ?? []).map(p => p.order_id))]
   }
 
-  if (orderIds.length > 0) {
-    const { error: orderError } = await admin
-      .from('orders')
-      .update({ status: 'closed', payment_status: skipPayment ? 'unpaid' : 'paid' })
-      .in('id', orderIds)
-    if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 })
+  for (const orderId of orderIds) {
+    await pb.collection('orders').update(orderId, {
+      status: 'closed',
+      payment_status: skipPayment ? 'pending' : 'paid',
+    })
   }
 
-  // Verifica se ainda há pedidos abertos na mesa (outros clientes)
-  const { data: remaining } = await admin
-    .from('orders')
-    .select('id')
-    .eq('table_id', tableId)
-    .in('status', ['open', 'preparing', 'served'])
+  // Verifica se ainda há pedidos abertos
+  const { items: remaining } = await pb.collection('orders').getList(1, 5, {
+    filter: `table_id = "${tableId}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
+  })
 
-  // Só libera a mesa se não houver mais pedidos abertos
-  if (!remaining || remaining.length === 0) {
-    await admin
-      .from('tables')
-      .update({ status: 'empty', guest_name: null, guest_phone: null })
-      .eq('id', tableId)
+  if (remaining.length === 0) {
+    await pb.collection('tables').update(tableId, {
+      status: 'empty',
+      guest_name: null,
+      guest_phone: null,
+    })
 
-    await admin
-      .from('table_sessions')
-      .update({ left_at: new Date().toISOString() })
-      .eq('table_id', tableId)
-      .is('left_at', null)
+    // Encerra sessões ativas da mesa
+    const { items: activeSessions } = await pb.collection('table_sessions').getList(1, 20, {
+      filter: `table_id = "${tableId}" && (left_at = null || left_at = "")`,
+    })
+    for (const s of activeSessions) {
+      await pb.collection('table_sessions').update(s.id, {
+        left_at: new Date().toISOString(),
+      })
+    }
   }
 
-  return NextResponse.json({ ok: true, tableFreed: !remaining || remaining.length === 0 })
+  return NextResponse.json({ ok: true, tableFreed: remaining.length === 0 })
 }

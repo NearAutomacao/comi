@@ -1,83 +1,130 @@
 'use server'
 
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import PocketBase from 'pocketbase'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { validateCPF } from '@/lib/utils'
+import { createAdminSessionToken } from '@/lib/auth-session'
+
+const PB_URL = process.env.PB_URL ?? 'http://127.0.0.1:8090'
+
+function pb() {
+  const client = new PocketBase(PB_URL)
+  client.autoCancellation(false)
+  return client
+}
 
 export async function signUp(formData: FormData) {
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
-  const name = formData.get('name') as string
-  const phone = formData.get('phone') as string
-  const cpf = (formData.get('cpf') as string).replace(/\D/g, '')
-  const isManager = formData.get('role') === 'manager'
+  let redirectTo: string | null = null
 
-  if (!validateCPF(cpf)) return { error: 'CPF inválido' }
+  try {
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const name = formData.get('name') as string
+    const phone = formData.get('phone') as string
+    const cpf = ((formData.get('cpf') ?? '') as string).replace(/\D/g, '')
+    const isManager = formData.get('role') === 'manager'
+    const next = formData.get('next') as string | null
 
-  const supabase = await createClient()
+    if (!validateCPF(cpf)) return { error: 'CPF inválido' }
 
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { name, phone, cpf, role: isManager ? 'manager' : 'customer', app: 'comi' },
-    },
-  })
+    const client = pb()
 
-  if (error) return { error: error.message }
-  if (!data.user) return { error: 'Erro ao criar conta' }
+    // Cria usuário no PocketBase
+    const user = await client.collection('users').create({
+      email,
+      password,
+      passwordConfirm: password,
+      name,
+      phone,
+      cpf,
+      role: isManager ? 'manager' : 'customer',
+    })
 
-  // Para gerentes: criar o restaurante automaticamente
-  const next = formData.get('next') as string | null
+    // Autentica para que operações subsequentes respeitem as rules
+    await client.collection('users').authWithPassword(email, password)
 
-  if (isManager) {
-    const admin = await createAdminClient()
-
-    // Garante que o profile foi criado pelo trigger
-    await new Promise(r => setTimeout(r, 500))
-
-    const { data: restaurant } = await admin
-      .from('restaurants')
-      .insert({
-        owner_id: data.user.id,
+    if (isManager) {
+      // Cria restaurante para o gerente
+      const restaurant = await client.collection('restaurants').create({
+        owner_id: user.id,
         name: `Restaurante de ${name.split(' ')[0]}`,
-        slug: `restaurante-${data.user.id.slice(0, 8)}`,
+        slug: `restaurante-${user.id.slice(0, 8)}`,
       })
-      .select()
-      .single()
 
-    if (restaurant) {
-      // Liga o profile ao restaurante
-      await admin
-        .from('profiles')
-        .update({ restaurant_id: restaurant.id })
-        .eq('id', data.user.id)
+      // Atualiza o usuário com o restaurant_id
+      await client.collection('users').update(user.id, { restaurant_id: restaurant.id })
 
-      // Cria horários padrão para o restaurante
+      // Cria horários padrão
       const days = [0, 1, 2, 3, 4, 5, 6]
-      await admin.from('working_hours').insert(
-        days.map(d => ({
+      for (const d of days) {
+        await client.collection('working_hours').create({
           restaurant_id: restaurant.id,
           day_of_week: d,
           open_time: '11:00',
           close_time: '23:00',
           is_open: true,
-        }))
-      )
+        })
+      }
 
       // Cria categorias padrão
-      await admin.from('menu_categories').insert([
-        { restaurant_id: restaurant.id, name: 'Porções',    slug: `porcoes-${restaurant.id.slice(0,6)}`,    display_order: 1 },
-        { restaurant_id: restaurant.id, name: 'Lanches',    slug: `lanches-${restaurant.id.slice(0,6)}`,    display_order: 2 },
-        { restaurant_id: restaurant.id, name: 'Bebidas',    slug: `bebidas-${restaurant.id.slice(0,6)}`,    display_order: 3 },
-        { restaurant_id: restaurant.id, name: 'Sobremesas', slug: `sobremesas-${restaurant.id.slice(0,6)}`, display_order: 4 },
-      ])
-    }
+      const defaultCategories = [
+        { name: 'Porções', slug: `porcoes-${restaurant.id.slice(0, 6)}`, display_order: 1 },
+        { name: 'Lanches', slug: `lanches-${restaurant.id.slice(0, 6)}`, display_order: 2 },
+        { name: 'Bebidas', slug: `bebidas-${restaurant.id.slice(0, 6)}`, display_order: 3 },
+        { name: 'Sobremesas', slug: `sobremesas-${restaurant.id.slice(0, 6)}`, display_order: 4 },
+      ]
+      for (const cat of defaultCategories) {
+        await client.collection('menu_categories').create({ restaurant_id: restaurant.id, ...cat })
+      }
 
-    redirect('/admin/dashboard')
+      // Cria subscription de trial
+      const now = new Date()
+      const expires = new Date()
+      expires.setDate(expires.getDate() + 30)
+      await client.collection('subscriptions').create({
+        restaurant_id: restaurant.id,
+        plan: 'trial',
+        status: 'trial',
+        starts_at: now.toISOString(),
+        expires_at: expires.toISOString(),
+      })
+
+      // Cria sessão JWT para o admin
+      const token = await createAdminSessionToken({
+        userId: user.id,
+        email: user.email,
+        name,
+        role: 'manager',
+        restaurantId: restaurant.id,
+      })
+
+      const cookieStore = await cookies()
+      cookieStore.set('comi_admin_session', token, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 7,
+        httpOnly: true,
+        sameSite: 'lax',
+      })
+
+      redirectTo = '/admin/dashboard'
+    } else {
+      redirectTo = next ?? '/cardapio'
+    }
+  } catch (err: any) {
+    console.error('[signUp] erro:', JSON.stringify(err?.data ?? err?.message ?? err))
+    const fieldErrors = err?.data?.data
+    if (fieldErrors) {
+      const detail = Object.entries(fieldErrors)
+        .map(([k, v]: any) => `${k}: ${v?.message ?? v}`)
+        .join(', ')
+      return { error: detail || err?.data?.message || 'Erro ao criar conta' }
+    }
+    const msg = err?.data?.message ?? err?.message ?? 'Erro ao criar conta'
+    return { error: msg }
   }
 
-  redirect(next ?? '/cardapio')
+  return { redirectTo }
 }
 
 export async function signUpManager(formData: FormData) {
@@ -95,29 +142,46 @@ export async function signIn(formData: FormData) {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
 
-  const supabase = await createClient()
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+  const client = pb()
 
-  if (error) return { error: error.message }
+  try {
+    const auth = await client.collection('users').authWithPassword(email, password)
+    const user = auth.record as any
 
-  // Usa o mesmo client (já tem a sessão) para checar o perfil
-  // Evita depender de SUPABASE_SERVICE_ROLE_KEY, que não está disponível no Electron
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', data.user.id)
-    .single()
+    if (!user) return { error: 'Conta não encontrada' }
 
-  if (!profile) {
-    await supabase.auth.signOut()
-    return { error: 'Conta não encontrada no COMI. Cadastre-se primeiro.' }
+    const role = user.role as 'manager' | 'customer'
+    const restaurantId = user.restaurant_id ?? null
+
+    if (role !== 'manager') {
+      return { error: 'Esta conta não tem acesso ao painel administrativo.' }
+    }
+
+    const token = await createAdminSessionToken({
+      userId: user.id,
+      email: user.email,
+      name: user.name ?? email,
+      role,
+      restaurantId,
+    })
+
+    const cookieStore = await cookies()
+    cookieStore.set('comi_admin_session', token, {
+      path: '/',
+      maxAge: 60 * 60 * 24 * 7,
+      httpOnly: true,
+      sameSite: 'lax',
+    })
+
+    return { role }
+  } catch (err: any) {
+    const msg = err?.data?.message ?? err?.message ?? 'Email ou senha incorretos'
+    return { error: msg }
   }
-
-  return { role: profile.role as string }
 }
 
 export async function signOut() {
-  const supabase = await createClient()
-  await supabase.auth.signOut()
+  const cookieStore = await cookies()
+  cookieStore.delete('comi_admin_session')
   redirect('/')
 }

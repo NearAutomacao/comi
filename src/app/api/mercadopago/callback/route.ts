@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/pb/server'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -14,7 +14,6 @@ export async function GET(request: NextRequest) {
   try {
     const redirectUri = `${appUrl}/api/mercadopago/callback`
 
-    // Trocar o code pelo access_token
     const tokenRes = await fetch('https://api.mercadopago.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -34,17 +33,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/admin/configuracoes?mp=error`)
     }
 
-    // Salvar tokens no restaurante do gerente
-    const supabase = await createAdminClient()
-    await supabase
-      .from('restaurants')
-      .update({
+    // Find restaurant by owner_id and update tokens
+    const pb = createAdminClient()
+    const { items } = await pb.collection('restaurants').getList(1, 1, {
+      filter: `owner_id = "${userId}"`,
+    })
+
+    if (items.length > 0) {
+      await pb.collection('restaurants').update(items[0].id, {
         mp_access_token: tokenData.access_token,
         mp_refresh_token: tokenData.refresh_token ?? null,
         mp_public_key: tokenData.public_key ?? null,
         mp_user_id: String(tokenData.user_id ?? ''),
       })
-      .eq('owner_id', userId)
+    }
 
     return NextResponse.redirect(`${appUrl}/admin/configuracoes?mp=success`)
   } catch (err) {

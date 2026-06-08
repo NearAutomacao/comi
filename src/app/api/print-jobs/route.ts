@@ -1,8 +1,7 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/pb/server'
 import { NextResponse } from 'next/server'
 
 // GET /api/print-jobs?printer=kitchen&restaurantId=xxx
-// Retorna jobs não impressos — usado pelo agente local de impressão
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const printer = searchParams.get('printer')
@@ -12,19 +11,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'restaurantId obrigatório' }, { status: 400 })
   }
 
-  const admin = await createAdminClient()
+  const pb = createAdminClient()
 
-  let query = admin
-    .from('print_jobs')
-    .select('*')
-    .eq('restaurant_id', restaurantId)
-    .is('printed_at', null)
-    .order('created_at', { ascending: true })
+  let filter = `restaurant_id = "${restaurantId}" && printed_at = null`
+  if (printer) filter += ` && printer = "${printer}"`
 
-  if (printer) query = query.eq('printer', printer)
+  const { items } = await pb.collection('print_jobs').getList(1, 100, {
+    filter,
+    sort: 'created',
+  })
 
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  return NextResponse.json({ jobs: data ?? [] })
+  return NextResponse.json({ jobs: items })
 }

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useRef } from 'react'
+import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,35 +44,41 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
   const [items, setItems] = useState(initialItems)
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [form, setForm] = useState<ItemForm>(emptyForm())
+  const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null)
+  const [photoPreview, setPhotoPreview] = useState('')
   const [open, setOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [activeCategory, setActiveCategory] = useState(initialCategories[0]?.id ?? '')
   const [catDialog, setCatDialog] = useState<{ mode: 'new' | 'rename'; catId?: string; value: string } | null>(null)
-  const supabase = createClient()
+  const pbRef = useRef(createClient())
 
   async function handleSaveCategory() {
     const name = catDialog?.value.trim()
     if (!name) return
+    const pb = pbRef.current
     const slug = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
 
     if (catDialog?.mode === 'new') {
       const display_order = categories.length
-      const { data, error } = await supabase
-        .from('menu_categories')
-        .insert({ restaurant_id: restaurantId, name, slug, display_order })
-        .select()
-        .single()
-      if (error) { toast.error('Erro ao criar categoria: ' + error.message); return }
-      setCategories(prev => [...prev, data as MenuCategory])
-      setActiveCategory(data.id)
+      try {
+        const data = await pb.collection('menu_categories').create({
+          restaurant_id: restaurantId, name, slug, display_order,
+        })
+        setCategories(prev => [...prev, data as unknown as MenuCategory])
+        setActiveCategory((data as any).id)
+      } catch (err: any) {
+        toast.error('Erro ao criar categoria: ' + (err?.message ?? 'Desconhecido'))
+        return
+      }
     } else {
       const catId = catDialog?.catId!
-      const { error } = await supabase
-        .from('menu_categories')
-        .update({ name, slug })
-        .eq('id', catId)
-      if (error) { toast.error('Erro ao renomear: ' + error.message); return }
-      setCategories(prev => prev.map(c => c.id === catId ? { ...c, name, slug } : c))
+      try {
+        await pb.collection('menu_categories').update(catId, { name, slug })
+        setCategories(prev => prev.map(c => c.id === catId ? { ...c, name, slug } : c))
+      } catch (err: any) {
+        toast.error('Erro ao renomear: ' + (err?.message ?? 'Desconhecido'))
+        return
+      }
     }
     setCatDialog(null)
   }
@@ -83,17 +89,22 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
       toast.error('Remova todos os itens desta categoria antes de excluí-la')
       return
     }
-    const { error } = await supabase.from('menu_categories').delete().eq('id', catId)
-    if (error) { toast.error('Erro ao excluir: ' + error.message); return }
-    const next = categories.filter(c => c.id !== catId)
-    setCategories(next)
-    if (activeCategory === catId) setActiveCategory(next[0]?.id ?? '')
-    toast.success('Categoria removida')
+    try {
+      await pbRef.current.collection('menu_categories').delete(catId)
+      const next = categories.filter(c => c.id !== catId)
+      setCategories(next)
+      if (activeCategory === catId) setActiveCategory(next[0]?.id ?? '')
+      toast.success('Categoria removida')
+    } catch (err: any) {
+      toast.error('Erro ao excluir: ' + (err?.message ?? 'Desconhecido'))
+    }
   }
 
   function openNew() {
     setEditing(null)
     setForm({ ...emptyForm(), category_id: activeCategory })
+    setPendingPhotoFile(null)
+    setPhotoPreview('')
     setOpen(true)
   }
 
@@ -110,18 +121,15 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
         ? item.cost_items.map(c => ({ ingredient: c.ingredient, quantity: c.quantity ?? '', unit_cost: String(c.unit_cost) }))
         : [{ ingredient: '', quantity: '', unit_cost: '0' }],
     })
+    setPendingPhotoFile(null)
+    setPhotoPreview(item.photo_url ?? '')
     setOpen(true)
   }
 
-  async function uploadPhoto(file: File): Promise<string> {
-    setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('menu-photos').upload(path, file)
-    if (error) { toast.error('Erro ao fazer upload'); setUploading(false); return '' }
-    const { data: { publicUrl } } = supabase.storage.from('menu-photos').getPublicUrl(path)
-    setUploading(false)
-    return publicUrl
+  function handlePhotoSelect(file: File) {
+    setPendingPhotoFile(file)
+    setPhotoPreview(URL.createObjectURL(file))
+    setForm(f => ({ ...f, photo_url: '' }))
   }
 
   async function handleSave() {
@@ -130,6 +138,9 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
       toast.error('Preencha nome, categoria e preço')
       return
     }
+
+    const pb = pbRef.current
+    setUploading(true)
 
     const payload = {
       restaurant_id: restaurantId,
@@ -141,64 +152,107 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
       photo_url: form.photo_url || null,
     }
 
-    let itemId = editing?.id
+    let savedRecord: any = null
 
-    if (editing) {
-      const { error } = await supabase.from('menu_items').update(payload).eq('id', editing.id)
-      if (error) { toast.error('Erro ao atualizar: ' + error.message); return }
-      await supabase.from('cost_items').delete().eq('menu_item_id', editing.id)
-    } else {
-      const { data, error } = await supabase.from('menu_items').insert(payload).select().single()
-      if (error) { toast.error('Erro ao salvar: ' + error.message); return }
-      itemId = data?.id
+    try {
+      if (editing) {
+        savedRecord = await pb.collection('menu_items').update(editing.id, payload)
+      } else {
+        savedRecord = await pb.collection('menu_items').create(payload)
+      }
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err?.message ?? 'Desconhecido'))
+      setUploading(false)
+      return
     }
 
-    if (itemId) {
-      const costPayloads = form.cost_items
-        .filter(c => c.ingredient)
-        .map(c => ({ restaurant_id: restaurantId, menu_item_id: itemId!, ingredient: c.ingredient, quantity: c.quantity || null, unit_cost: parseFloat(c.unit_cost) || 0 }))
-      if (costPayloads.length) await supabase.from('cost_items').insert(costPayloads)
+    const itemId = savedRecord.id
+
+    // Upload photo if a new file was selected
+    if (pendingPhotoFile) {
+      try {
+        const fd = new FormData()
+        fd.append('photo', pendingPhotoFile)
+        const photoRecord = await pb.collection('menu_items').update(itemId, fd)
+        const filename = Array.isArray(photoRecord.photo) ? photoRecord.photo[0] : photoRecord.photo
+        if (filename) {
+          const photoUrl = `${pb.baseURL}/api/files/menu_items/${itemId}/${filename}`
+          savedRecord = await pb.collection('menu_items').update(itemId, { photo_url: photoUrl })
+        }
+      } catch {}
     }
 
-    const { data: fresh } = await supabase.from('menu_items').select('*, cost_items(*)').eq('id', itemId!).single()
-    if (fresh) {
-      if (editing) setItems(prev => prev.map(i => i.id === fresh.id ? fresh as MenuItem : i))
-      else setItems(prev => [...prev, fresh as MenuItem])
+    // Delete old cost_items then recreate
+    try {
+      const { items: oldCosts } = await pb.collection('cost_items').getList(1, 50, {
+        filter: `menu_item_id = "${itemId}"`,
+      })
+      for (const c of oldCosts) {
+        await pb.collection('cost_items').delete(c.id)
+      }
+    } catch {}
+
+    const validCosts = form.cost_items.filter(c => c.ingredient)
+    const newCostItems: CostItem[] = []
+    for (const c of validCosts) {
+      try {
+        const created = await pb.collection('cost_items').create({
+          restaurant_id: restaurantId,
+          menu_item_id: itemId,
+          ingredient: c.ingredient,
+          quantity: c.quantity || null,
+          unit_cost: parseFloat(c.unit_cost) || 0,
+        })
+        newCostItems.push(created as unknown as CostItem)
+      } catch {}
     }
+
+    setUploading(false)
+
+    const finalItem: MenuItem = {
+      ...(savedRecord as any),
+      cost_items: newCostItems,
+    }
+
+    if (editing) setItems(prev => prev.map(i => i.id === itemId ? finalItem : i))
+    else setItems(prev => [...prev, finalItem])
 
     toast.success(editing ? 'Item atualizado' : 'Item adicionado')
     setOpen(false)
+    setPendingPhotoFile(null)
+    setPhotoPreview('')
   }
 
   async function deleteItem(id: string) {
-    const { error } = await supabase.from('menu_items').delete().eq('id', id)
-    if (error) {
-      if (error.code === '23503') {
-        // FK violation: item has order history — disable instead of delete
-        await supabase.from('menu_items').update({ available: false }).eq('id', id)
+    const pb = pbRef.current
+    try {
+      await pb.collection('menu_items').delete(id)
+      setItems(prev => prev.filter(i => i.id !== id))
+      toast.success('Item removido')
+    } catch (err: any) {
+      if (err?.status === 400) {
+        // Has referenced records — disable instead
+        await pb.collection('menu_items').update(id, { available: false })
         setItems(prev => prev.map(i => i.id === id ? { ...i, available: false } : i))
         toast.warning('Item tem pedidos vinculados. Foi desativado em vez de excluído.')
         return
       }
-      toast.error('Não foi possível remover: ' + error.message)
-      return
+      toast.error('Não foi possível remover: ' + (err?.message ?? 'Desconhecido'))
     }
-    setItems(prev => prev.filter(i => i.id !== id))
-    toast.success('Item removido')
   }
 
   async function setCategoryPrinter(categoryId: string, printer: 'kitchen' | 'bar' | null) {
-    const { error } = await supabase
-      .from('menu_categories')
-      .update({ printer })
-      .eq('id', categoryId)
-    if (error) { toast.error('Erro ao salvar impressora'); return }
-    setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, printer } : c))
-    toast.success(printer ? `Impressora: ${printer === 'kitchen' ? 'Cozinha' : 'Bar'}` : 'Impressora removida')
+    try {
+      await pbRef.current.collection('menu_categories').update(categoryId, { printer })
+      setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, printer } : c))
+      toast.success(printer ? `Impressora: ${printer === 'kitchen' ? 'Cozinha' : 'Bar'}` : 'Impressora removida')
+    } catch {
+      toast.error('Erro ao salvar impressora')
+    }
   }
 
   async function toggleAvailable(item: MenuItem) {
-    await supabase.from('menu_items').update({ available: !item.available }).eq('id', item.id)
+    await pbRef.current.collection('menu_items').update(item.id, { available: !item.available })
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, available: !i.available } : i))
   }
 
@@ -266,7 +320,6 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
           </div>
         ))}
 
-        {/* Nova categoria */}
         <button
           onClick={() => setCatDialog({ mode: 'new', value: '' })}
           className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
@@ -350,7 +403,7 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
         </DialogContent>
       </Dialog>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) { setPendingPhotoFile(null); setPhotoPreview('') } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Editar item' : 'Novo item'}</DialogTitle>
@@ -383,12 +436,12 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
             {/* Photo upload */}
             <div className="space-y-2">
               <Label>Foto</Label>
-              {form.photo_url && (
+              {(photoPreview || form.photo_url) && (
                 <div className="relative h-28 w-full rounded-lg overflow-hidden">
-                  <Image src={form.photo_url} alt="preview" fill className="object-cover" sizes="400px" />
+                  <Image src={photoPreview || form.photo_url} alt="preview" fill className="object-cover" sizes="400px" />
                   <button
                     className="absolute top-1 right-1 bg-white rounded-full p-0.5 shadow"
-                    onClick={() => setForm(f => ({ ...f, photo_url: '' }))}
+                    onClick={() => { setForm(f => ({ ...f, photo_url: '' })); setPendingPhotoFile(null); setPhotoPreview('') }}
                   >
                     <X size={14} />
                   </button>
@@ -401,12 +454,9 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={async e => {
+                  onChange={e => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      const url = await uploadPhoto(file)
-                      if (url) setForm(f => ({ ...f, photo_url: url }))
-                    }
+                    if (file) handlePhotoSelect(file)
                   }}
                 />
               </label>
@@ -460,8 +510,8 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
               <Label>Disponível no cardápio</Label>
             </div>
 
-            <Button onClick={handleSave} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
-              {editing ? 'Salvar alterações' : 'Criar item'}
+            <Button onClick={handleSave} disabled={uploading} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+              {uploading ? 'Salvando...' : editing ? 'Salvar alterações' : 'Criar item'}
             </Button>
           </div>
         </DialogContent>

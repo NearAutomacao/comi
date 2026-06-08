@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TrendingUp, UtensilsCrossed, Calendar, DollarSign } from 'lucide-react'
@@ -25,7 +25,7 @@ export default function DashboardClient({
   initialTotal,
   initialReservations,
 }: Props) {
-  const supabase = useRef(createClient()).current
+  const pbRef = useRef(createClient())
   const [revenue, setRevenue] = useState(initialRevenue)
   const [orders, setOrders] = useState(initialOrders)
   const [occupied, setOccupied] = useState(initialOccupied)
@@ -33,46 +33,49 @@ export default function DashboardClient({
   const totalTables = initialTotal
 
   async function refetchOrders() {
+    const pb = pbRef.current
     const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase
-      .from('orders')
-      .select('total')
-      .eq('restaurant_id', restaurantId)
-      .gte('created_at', today)
-      .neq('status', 'cancelled')
-    if (data) {
-      setOrders(data.length)
-      setRevenue(data.reduce((s, o) => s + Number(o.total), 0))
-    }
+    try {
+      const { items } = await pb.collection('orders').getList(1, 2000, {
+        filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && created >= "${today} 00:00:00"`,
+      })
+      setOrders(items.length)
+      setRevenue(items.reduce((s, o: any) => s + Number(o.total ?? 0), 0))
+    } catch {}
   }
 
   async function refetchTables() {
-    const { data } = await supabase
-      .from('tables')
-      .select('id')
-      .eq('restaurant_id', restaurantId)
-      .eq('status', 'occupied')
-    if (data) setOccupied(data.length)
+    const pb = pbRef.current
+    try {
+      const { items } = await pb.collection('tables').getList(1, 200, {
+        filter: `restaurant_id = "${restaurantId}" && status = "occupied"`,
+      })
+      setOccupied(items.length)
+    } catch {}
   }
 
   useEffect(() => {
     if (!restaurantId) return
+    const pb = pbRef.current
+    const unsubs: (() => void)[] = []
 
-    const ordersChannel = supabase
-      .channel(`dash-orders-${restaurantId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` }, refetchOrders)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders', filter: `restaurant_id=eq.${restaurantId}` }, refetchOrders)
-      .subscribe()
+    pb.collection('orders').subscribe('*', event => {
+      if (['create', 'update'].includes(event.action)) {
+        if ((event.record as any).restaurant_id === restaurantId) refetchOrders()
+      }
+    }, { filter: `restaurant_id = "${restaurantId}"` })
+      .then(u => unsubs.push(u))
+      .catch(() => {})
 
-    const tablesChannel = supabase
-      .channel(`dash-tables-${restaurantId}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'tables', filter: `restaurant_id=eq.${restaurantId}` }, refetchTables)
-      .subscribe()
+    pb.collection('tables').subscribe('*', event => {
+      if (event.action === 'update') {
+        if ((event.record as any).restaurant_id === restaurantId) refetchTables()
+      }
+    }, { filter: `restaurant_id = "${restaurantId}"` })
+      .then(u => unsubs.push(u))
+      .catch(() => {})
 
-    return () => {
-      supabase.removeChannel(ordersChannel)
-      supabase.removeChannel(tablesChannel)
-    }
+    return () => { unsubs.forEach(u => u()) }
   }, [restaurantId])
 
   const stats = [

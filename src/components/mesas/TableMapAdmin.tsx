@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { createClient } from '@/lib/pb/client'
 import { getTableColor } from '@/types'
 import type { Table } from '@/types'
 import TablePopup from './TablePopup'
@@ -25,91 +25,108 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const mapRef = useRef<HTMLDivElement>(null)
   const dragMovedRef = useRef(false)
-  const supabase = createClient()
+  const pbRef = useRef(createClient())
 
-  // Busca o pedido aberto mais recente de uma mesa e popula current_order
-  // Usado quando uma mesa fica ocupada mas current_order ainda é null (ex: transferência)
+  // Busca o pedido aberto mais recente de uma mesa (para caso de transferência)
   async function fetchCurrentOrderForTable(tableId: string) {
-    const { data } = await supabase
-      .from('orders')
-      .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
-      .eq('table_id', tableId)
-      .in('status', ['open', 'preparing', 'served'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-    if (data) {
+    const pb = pbRef.current
+    try {
+      const { items: orders } = await pb.collection('orders').getList(1, 1, {
+        filter: `table_id = "${tableId}" && (status = "open" || status = "preparing" || status = "served")`,
+        sort: '-created',
+      })
+      if (!orders.length) return
+      const order = orders[0]
+      const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
+        filter: `order_id = "${order.id}"`,
+      })
+      const items = await Promise.all(
+        orderItems.map(async (item: any) => {
+          let menuItem: any = null
+          try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
+          return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+        })
+      )
       setTables(prev => prev.map(t =>
-        t.id === tableId ? { ...t, status: 'occupied' as const, current_order: data as any } : t
+        t.id === tableId ? { ...t, status: 'occupied' as const, current_order: { ...order, order_items: items } as any } : t
       ))
-    }
+    } catch {}
   }
 
-  // Realtime subscription
+  // Realtime subscriptions
   useEffect(() => {
-    const channel = supabase
-      .channel('tables-realtime')
-      .on('postgres_changes', { event: '*', schema: 'comi', table: 'tables' }, payload => {
-        if (payload.eventType === 'UPDATE') {
-          const newTable = payload.new as Table
-          setTables(prev => {
-            const existing = prev.find(t => t.id === newTable.id)
-            if (existing && existing.status !== newTable.status) {
-              if (newTable.status === 'occupied') {
-                toast.success(`Mesa ${newTable.number} — ocupada`)
-                // Sem current_order = possível transferência — busca pedidos do banco
-                if (!existing.current_order) {
-                  fetchCurrentOrderForTable(newTable.id)
-                }
-              } else if (newTable.status === 'empty') {
-                toast.info(`Mesa ${newTable.number} — comanda fechada`)
-              }
+    const pb = pbRef.current
+    const unsubs: (() => void)[] = []
+
+    pb.collection('tables').subscribe('*', event => {
+      if (event.action === 'update') {
+        const newTable = event.record as unknown as Table
+        setTables(prev => {
+          const existing = prev.find(t => t.id === newTable.id)
+          if (existing && existing.status !== newTable.status) {
+            if (newTable.status === 'occupied') {
+              toast.success(`Mesa ${newTable.number} — ocupada`)
+              if (!existing.current_order) fetchCurrentOrderForTable(newTable.id)
+            } else if (newTable.status === 'empty') {
+              toast.info(`Mesa ${newTable.number} — comanda fechada`)
             }
-            return prev.map(t => t.id === newTable.id ? { ...t, ...newTable } : t)
+          }
+          return prev.map(t => t.id === newTable.id ? { ...t, ...newTable } : t)
+        })
+      }
+      if (event.action === 'create') {
+        setTables(prev => [...prev, { ...(event.record as unknown as Table), current_order: null }])
+      }
+      if (event.action === 'delete') {
+        setTables(prev => prev.filter(t => t.id !== event.record.id))
+      }
+    }, { filter: `restaurant_id = "${restaurantId}"` })
+      .then(unsub => unsubs.push(unsub))
+      .catch(() => {})
+
+    pb.collection('orders').subscribe('*', async event => {
+      if (event.action === 'create') {
+        const order = event.record
+        if (order.restaurant_id !== restaurantId) return
+        try {
+          const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
+            filter: `order_id = "${order.id}"`,
           })
-        }
-        if (payload.eventType === 'INSERT') {
-          setTables(prev => [...prev, { ...(payload.new as Table), current_order: null }])
-        }
-        if (payload.eventType === 'DELETE') {
-          setTables(prev => prev.filter(t => t.id !== (payload.old as Table).id))
-        }
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'comi', table: 'orders' }, async payload => {
-        const newOrder = payload.new as { id: string; table_id: string; total: number; status: string; restaurant_id: string; customer_id?: string; payment_status: string; created_at: string }
-        const { data: completeOrder } = await supabase
-          .from('orders')
-          .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
-          .eq('id', newOrder.id)
-          .single()
-        setTables(prev => prev.map(t =>
-          t.id === newOrder.table_id
-            ? { ...t, status: 'occupied' as const, current_order: completeOrder as any }
-            : t
-        ))
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {
-        const updated = payload.new as { id: string; table_id: string; total: number; status: string }
+          const items = await Promise.all(
+            orderItems.map(async (item: any) => {
+              let menuItem: any = null
+              try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
+              return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+            })
+          )
+          setTables(prev => prev.map(t =>
+            t.id === order.table_id
+              ? { ...t, status: 'occupied' as const, current_order: { ...order, order_items: items } as any }
+              : t
+          ))
+        } catch {}
+      }
+      if (event.action === 'update') {
+        const updated = event.record
         if (['closed', 'cancelled'].includes(updated.status)) return
         setTables(prev => prev.map(t => {
           if (t.id !== updated.table_id) return t
           if (!t.current_order) return t
           return { ...t, current_order: { ...t.current_order, total: updated.total } }
         }))
-      })
-      .subscribe()
+      }
+    }, { filter: `restaurant_id = "${restaurantId}"` })
+      .then(unsub => unsubs.push(unsub))
+      .catch(() => {})
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { unsubs.forEach(u => u()) }
   }, [])
 
   function handleMouseDown(e: React.MouseEvent, tableId: string) {
     if ((e.target as HTMLElement).closest('button')) return
     dragMovedRef.current = false
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setDragOffset({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    })
+    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
     setDragging(tableId)
   }
 
@@ -126,36 +143,40 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
     if (!dragging) return
     const table = tables.find(t => t.id === dragging)
     if (table) {
-      await supabase.from('tables').update({ pos_x: table.pos_x, pos_y: table.pos_y }).eq('id', table.id)
+      await pbRef.current.collection('tables').update(table.id, { pos_x: table.pos_x, pos_y: table.pos_y })
     }
     setDragging(null)
   }
 
   async function addTable() {
+    const pb = pbRef.current
     const maxNum = tables.reduce((m, t) => Math.max(m, t.number), 0)
-    const { data, error } = await supabase
-      .from('tables')
-      .insert({ restaurant_id: restaurantId, number: maxNum + 1, capacity: 4, pos_x: 10, pos_y: 10, status: 'empty' })
-      .select()
-      .single()
-    if (error) { toast.error('Erro: ' + error.message); return }
-    if (data) {
-      setTables(prev => [...prev, data as Table])
-      toast.success(`Mesa ${data.number} adicionada`)
+    try {
+      const data = await pb.collection('tables').create({
+        restaurant_id: restaurantId,
+        number: maxNum + 1,
+        capacity: 4,
+        pos_x: 10,
+        pos_y: 10,
+        status: 'empty',
+      })
+      // Realtime 'create' event atualiza o estado — não atualizar localmente para evitar duplicata
+      toast.success(`Mesa ${(data as any).number} adicionada`)
+    } catch (err: any) {
+      toast.error('Erro: ' + (err?.message ?? 'Desconhecido'))
     }
   }
 
   async function deleteTable(id: string) {
-    const { error } = await supabase.from('tables').delete().eq('id', id)
-    if (error) {
-      toast.error('Erro ao remover: ' + error.message)
-      return
+    try {
+      await pbRef.current.collection('tables').delete(id)
+      // Realtime 'delete' event atualiza o estado — não atualizar localmente para evitar duplicata
+      toast.success('Mesa removida')
+    } catch (err: any) {
+      toast.error('Erro ao remover: ' + (err?.message ?? 'Desconhecido'))
     }
-    setTables(prev => prev.filter(t => t.id !== id))
-    toast.success('Mesa removida')
   }
 
-  // No Electron (rede local), usa o IP da máquina para o QR code funcionar no celular
   const appUrl = localIP && localIP !== '127.0.0.1'
     ? `http://${localIP}:3100`
     : (typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? ''))
@@ -229,7 +250,6 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
         />
       )}
 
-      {/* QR Code dialog */}
       <Dialog open={!!qrTable} onOpenChange={() => setQrTable(null)}>
         <DialogContent className="max-w-xs text-center">
           <DialogHeader>

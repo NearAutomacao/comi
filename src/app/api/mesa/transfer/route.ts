@@ -1,8 +1,7 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import { NextResponse } from 'next/server'
 
 // POST /api/mesa/transfer
-// Transfere todos os pedidos abertos e sessões ativas de uma mesa para outra
 export async function POST(req: Request) {
   const { fromTableId, toTableId } = await req.json() as {
     fromTableId: string
@@ -12,24 +11,20 @@ export async function POST(req: Request) {
   if (!fromTableId || !toTableId) {
     return NextResponse.json({ error: 'fromTableId e toTableId são obrigatórios' }, { status: 400 })
   }
-
   if (fromTableId === toTableId) {
     return NextResponse.json({ error: 'Mesas de origem e destino são iguais' }, { status: 400 })
   }
 
-  const admin = await createAdminClient()
+  const pb = createAdminClient()
 
-  const { data: tables } = await admin
-    .from('tables')
-    .select('id, number, restaurant_id, status, guest_name, guest_phone')
-    .in('id', [fromTableId, toTableId])
-
-  const fromTable = tables?.find(t => t.id === fromTableId)
-  const toTable = tables?.find(t => t.id === toTableId)
-
-  if (!fromTable || !toTable) {
+  let fromTable: any, toTable: any
+  try {
+    fromTable = await pb.collection('tables').getOne(fromTableId)
+    toTable = await pb.collection('tables').getOne(toTableId)
+  } catch {
     return NextResponse.json({ error: 'Mesa não encontrada' }, { status: 404 })
   }
+
   if (fromTable.restaurant_id !== toTable.restaurant_id) {
     return NextResponse.json({ error: 'Mesas de restaurantes diferentes' }, { status: 400 })
   }
@@ -41,52 +36,45 @@ export async function POST(req: Request) {
   }
 
   // Transfere pedidos abertos
-  await admin
-    .from('orders')
-    .update({ table_id: toTableId })
-    .eq('table_id', fromTableId)
-    .in('status', ['open', 'preparing', 'served'])
+  const { items: openOrders } = await pb.collection('orders').getList(1, 50, {
+    filter: `table_id = "${fromTableId}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
+  })
+  for (const order of openOrders) {
+    await pb.collection('orders').update(order.id, { table_id: toTableId })
+  }
 
   // Transfere sessões ativas (sem left_at)
-  // Como a FK do JWT aponta para sessionId (não tableId), os tokens dos clientes
-  // continuam válidos — o table_id é consultado do banco em tempo real
-  await admin
-    .from('table_sessions')
-    .update({ table_id: toTableId })
-    .eq('table_id', fromTableId)
-    .is('left_at', null)
+  const { items: activeSessions } = await pb.collection('table_sessions').getList(1, 50, {
+    filter: `table_id = "${fromTableId}" && left_at = null`,
+  })
+  for (const session of activeSessions) {
+    await pb.collection('table_sessions').update(session.id, { table_id: toTableId })
+  }
 
-  // Transfere print_jobs não impressos
-  await admin
-    .from('print_jobs')
-    .update({ table_number: toTable.number })
-    .eq('restaurant_id', fromTable.restaurant_id)
-    .is('printed_at', null)
-    .in(
-      'order_id',
-      (await admin
-        .from('orders')
-        .select('id')
-        .eq('table_id', toTableId)
-        .in('status', ['open', 'preparing', 'served'])
-        .then(r => r.data?.map(o => o.id) ?? []))
-    )
+  // Transfere print_jobs não impressos dos pedidos transferidos
+  const orderIds = openOrders.map((o: any) => o.id)
+  if (orderIds.length > 0) {
+    const { items: pendingJobs } = await pb.collection('print_jobs').getList(1, 100, {
+      filter: `restaurant_id = "${fromTable.restaurant_id}" && printed_at = null && (${inFilter('order_id', orderIds)})`,
+    })
+    for (const job of pendingJobs) {
+      await pb.collection('print_jobs').update(job.id, { table_number: toTable.number })
+    }
+  }
 
   // Ocupa mesa destino com dados da origem
-  await admin
-    .from('tables')
-    .update({
-      status: 'occupied',
-      guest_name: fromTable.guest_name,
-      guest_phone: fromTable.guest_phone,
-    })
-    .eq('id', toTableId)
+  await pb.collection('tables').update(toTableId, {
+    status: 'occupied',
+    guest_name: fromTable.guest_name,
+    guest_phone: fromTable.guest_phone,
+  })
 
   // Libera mesa origem
-  await admin
-    .from('tables')
-    .update({ status: 'empty', guest_name: null, guest_phone: null })
-    .eq('id', fromTableId)
+  await pb.collection('tables').update(fromTableId, {
+    status: 'empty',
+    guest_name: null,
+    guest_phone: null,
+  })
 
   return NextResponse.json({
     ok: true,

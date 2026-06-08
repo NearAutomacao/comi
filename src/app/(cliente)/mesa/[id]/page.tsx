@@ -1,5 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/pb/server'
+import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
 import TableSelection from '@/components/mesas/TableSelection'
 
 interface Props {
@@ -8,28 +10,33 @@ interface Props {
 
 export default async function MesaPage({ params }: Props) {
   const { id } = await params
-  const supabase = await createClient()
+  const pb = createAdminClient()
 
-  const { data: table } = await supabase
-    .from('tables')
-    .select('*')
-    .eq('id', id)
-    .single()
-
-  if (!table) notFound()
+  let table: any
+  try {
+    table = await pb.collection('tables').getOne(id)
+  } catch {
+    notFound()
+  }
 
   // Verifica se a mesa está bloqueada por uma reserva de outro cliente
-  const { data: { user } } = await supabase.auth.getUser()
-  const today = new Date().toISOString().split('T')[0]
-  const { data: activeReservation } = await supabase
-    .from('reservations')
-    .select('id, customer_id, status')
-    .eq('table_id', id)
-    .eq('date', today)
-    .in('status', ['pending', 'confirmed'])
-    .maybeSingle()
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
+  const userId = session?.userId ?? null
 
-  const blockedByOther = !!(activeReservation && activeReservation.customer_id !== user?.id)
+  const today = new Date().toISOString().split('T')[0]
+  let blockedByOther = false
+
+  try {
+    const { items } = await pb.collection('reservations').getList(1, 1, {
+      filter: `table_id = "${id}" && date = "${today}" && (status = "pending" || status = "confirmed")`,
+    })
+    if (items.length > 0) {
+      const reservation = items[0] as any
+      blockedByOther = !!(reservation.customer_id && reservation.customer_id !== userId)
+    }
+  } catch {}
 
   return (
     <TableSelection

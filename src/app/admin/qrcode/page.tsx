@@ -1,25 +1,18 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
 import QRCodeCard from '@/components/shared/QRCodeCard'
 
 export default async function QRCodePage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: restaurant } = await supabase
-    .from('restaurants')
-    .select('slug, name')
-    .eq('owner_id', user.id)
-    .single()
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
+  if (!session) redirect('/login')
 
   const localIP = process.env.LOCAL_IP
   const isDesktop = !!localIP && localIP !== '127.0.0.1'
 
-  const localUrl = isDesktop
-    ? `http://${localIP}:3100/cardapio`
-    : null
-
+  const localUrl = isDesktop ? `http://${localIP}:3100/cardapio` : null
   const productionUrl = process.env.NEXT_PUBLIC_APP_URL
     ? `${process.env.NEXT_PUBLIC_APP_URL}/cardapio`
     : null
@@ -40,7 +33,6 @@ export default async function QRCodePage() {
             highlight
           />
         )}
-
         {productionUrl && (
           <QRCodeCard
             url={productionUrl}
@@ -48,7 +40,6 @@ export default async function QRCodePage() {
             description="Funciona de qualquer lugar com internet."
           />
         )}
-
         {!localUrl && !productionUrl && (
           <p className="text-gray-500">Nenhuma URL configurada.</p>
         )}

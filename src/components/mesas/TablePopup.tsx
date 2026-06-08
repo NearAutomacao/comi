@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useRef } from 'react'
+import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -36,38 +36,45 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
   const [showTransfer, setShowTransfer] = useState(false)
   const [emptyTables, setEmptyTables] = useState<{ id: string; number: number }[]>([])
   const [transferring, setTransferring] = useState(false)
-  const supabase = createClient()
+  const pbRef = useRef(createClient())
 
-  // Acompanha mudanças no current_order da mesa
   useEffect(() => {
     if (table.current_order) {
       setOrderStatus(table.current_order.status ?? 'open')
     }
   }, [table.current_order?.id, table.current_order?.status, table.current_order?.total])
 
-  // Fallback: se a mesa está ocupada mas current_order ainda é null (ex: popup aberto logo após
-  // uma transferência antes do realtime propagar), busca o pedido diretamente do banco
+  // Fallback: mesa ocupada mas sem current_order (ex: popup aberto logo após transferência)
   useEffect(() => {
     if (table.status !== 'occupied' || table.current_order) return
-    supabase
-      .from('orders')
-      .select('id, total, status, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
-      .eq('table_id', table.id)
-      .in('status', ['open', 'preparing', 'served'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-      .then(({ data }) => {
-        if (data) onUpdate({ ...table, current_order: data as any })
+    const pb = pbRef.current
+    pb.collection('orders').getList(1, 1, {
+      filter: `table_id = "${table.id}" && (status = "open" || status = "preparing" || status = "served")`,
+      sort: '-created',
+    }).then(async ({ items }) => {
+      if (!items.length) return
+      const order = items[0]
+      const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
+        filter: `order_id = "${order.id}"`,
       })
+      const enriched = await Promise.all(
+        orderItems.map(async (item: any) => {
+          let menuItem: any = null
+          try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
+          return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+        })
+      )
+      onUpdate({ ...table, current_order: { ...order, order_items: enriched } as any })
+    }).catch(() => {})
   }, [table.id, table.status, table.current_order])
 
   async function updateOrderStatus(status: OrderStatus) {
     if (!table.current_order) return
-    await supabase.from('orders').update({ status }).eq('id', table.current_order.id)
+    const pb = pbRef.current
+    await pb.collection('orders').update(table.current_order.id, { status })
     setOrderStatus(status)
     if (status === 'closed') {
-      await supabase.from('tables').update({ status: 'empty' }).eq('id', table.id)
+      await pb.collection('tables').update(table.id, { status: 'empty' })
       onUpdate({ ...table, status: 'empty', current_order: null })
       toast.success('Mesa liberada!')
       onClose()
@@ -77,7 +84,6 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
   }
 
   async function clearTable() {
-    // Usa a API para fechar TODOS os pedidos abertos da mesa e liberar corretamente
     await fetch('/api/conta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -89,14 +95,12 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
   }
 
   async function openTransfer() {
-    const { data } = await supabase
-      .from('tables')
-      .select('id, number')
-      .eq('restaurant_id', table.restaurant_id)
-      .eq('status', 'empty')
-      .neq('id', table.id)
-      .order('number')
-    setEmptyTables(data ?? [])
+    const pb = pbRef.current
+    const { items } = await pb.collection('tables').getList(1, 100, {
+      filter: `restaurant_id = "${table.restaurant_id}" && status = "empty" && id != "${table.id}"`,
+      sort: 'number',
+    })
+    setEmptyTables(items.map((t: any) => ({ id: t.id, number: t.number })))
     setShowTransfer(true)
   }
 
@@ -121,17 +125,22 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
     }
   }
 
-  async function handleOrderSent(orderId: string, addedTotal: number) {
-    // Re-busca o pedido atualizado com itens
-    const { data: freshOrder } = await supabase
-      .from('orders')
-      .select('id, total, status, order_items(id, quantity, menu_item:menu_items(name))')
-      .eq('id', orderId)
-      .single()
-
-    if (freshOrder) {
-      onUpdate({ ...table, status: 'occupied', current_order: freshOrder as unknown as typeof table.current_order })
-    }
+  async function handleOrderSent(orderId: string) {
+    const pb = pbRef.current
+    try {
+      const order = await pb.collection('orders').getOne(orderId)
+      const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
+        filter: `order_id = "${orderId}"`,
+      })
+      const enriched = await Promise.all(
+        orderItems.map(async (item: any) => {
+          let menuItem: any = null
+          try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
+          return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+        })
+      )
+      onUpdate({ ...table, status: 'occupied', current_order: { ...order, order_items: enriched } as any })
+    } catch {}
   }
 
   return (
@@ -148,7 +157,6 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
             </DialogTitle>
           </DialogHeader>
 
-          {/* Convidado atual */}
           {table.guest_name && (
             <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-sm flex items-center gap-3 mb-1">
               <span className="font-semibold text-orange-700">{table.guest_name}</span>
@@ -159,10 +167,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
           {!table.current_order ? (
             <div className="text-center py-6 space-y-3">
               <p className="text-gray-400">Mesa livre</p>
-              <Button
-                onClick={() => setShowWaiterOrder(true)}
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-              >
+              <Button onClick={() => setShowWaiterOrder(true)} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
                 <PlusCircle size={16} className="mr-2" />
                 Lançar pedido
               </Button>
@@ -203,25 +208,14 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
               </div>
 
               <div className="flex gap-2 pt-2 flex-wrap">
-                <Button
-                  onClick={() => setShowWaiterOrder(true)}
-                  variant="outline"
-                  className="flex-1 border-orange-300 text-orange-600"
-                >
+                <Button onClick={() => setShowWaiterOrder(true)} variant="outline" className="flex-1 border-orange-300 text-orange-600">
                   <PlusCircle size={15} className="mr-1" /> Adicionar itens
                 </Button>
-                <Button
-                  onClick={() => setShowPayment(true)}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                >
+                <Button onClick={() => setShowPayment(true)} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
                   Pagamento
                 </Button>
               </div>
-              <Button
-                onClick={openTransfer}
-                variant="outline"
-                className="w-full border-blue-300 text-blue-600 hover:bg-blue-50"
-              >
+              <Button onClick={openTransfer} variant="outline" className="w-full border-blue-300 text-blue-600 hover:bg-blue-50">
                 <ArrowRightLeft size={15} className="mr-2" /> Trocar de mesa
               </Button>
               <Button onClick={clearTable} variant="outline" className="w-full">
@@ -254,7 +248,6 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
         />
       )}
 
-      {/* Dialog de troca de mesa */}
       <Dialog open={showTransfer} onOpenChange={v => { if (!transferring) setShowTransfer(v) }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -264,9 +257,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
             </DialogTitle>
           </DialogHeader>
           {emptyTables.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">
-              Nenhuma mesa livre disponível no momento.
-            </p>
+            <p className="text-sm text-gray-500 text-center py-4">Nenhuma mesa livre disponível.</p>
           ) : (
             <div className="grid grid-cols-4 gap-2 py-2">
               {emptyTables.map(t => (
@@ -281,9 +272,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
               ))}
             </div>
           )}
-          <p className="text-xs text-gray-400 text-center">
-            Pedidos e comandas serão transferidos automaticamente
-          </p>
+          <p className="text-xs text-gray-400 text-center">Pedidos e comandas serão transferidos automaticamente</p>
         </DialogContent>
       </Dialog>
     </>

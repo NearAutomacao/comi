@@ -1,25 +1,37 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
+import { createAdminClient } from '@/lib/pb/server'
 import { createReservationPreference } from '@/lib/mercadopago/client'
 
 export async function POST(request: Request) {
   try {
     const { reservationId } = await request.json()
-    const supabase = await createClient()
+    const cookieStore = await cookies()
+    const token = cookieStore.get('comi_admin_session')?.value
+    const session = token ? await verifyAdminSessionToken(token) : null
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    if (!session) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
 
-    const { data: reservation } = await supabase
-      .from('reservations')
-      .select('*, table:tables(number)')
-      .eq('id', reservationId)
-      .eq('customer_id', user.id)
-      .single()
+    const pb = createAdminClient()
+    let reservation: any
+    try {
+      reservation = await pb.collection('reservations').getOne(reservationId)
+      if (reservation.customer_id !== session.userId) {
+        return NextResponse.json({ error: 'Reserva não encontrada' }, { status: 404 })
+      }
+    } catch {
+      return NextResponse.json({ error: 'Reserva não encontrada' }, { status: 404 })
+    }
 
-    if (!reservation) return NextResponse.json({ error: 'Reserva não encontrada' }, { status: 404 })
+    let tableNum: string | number = '?'
+    if (reservation.table_id) {
+      try {
+        const table = await pb.collection('tables').getOne(reservation.table_id)
+        tableNum = table.number
+      } catch {}
+    }
 
-    const tableNum = (reservation.table as { number: number } | null)?.number ?? '?'
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
     const preference = await createReservationPreference({
@@ -27,7 +39,7 @@ export async function POST(request: Request) {
       reservationId,
       amount: 50,
       description: `Reserva — Mesa ${tableNum} em ${reservation.date}`,
-      customerEmail: user.email ?? '',
+      customerEmail: session.email ?? '',
       successUrl: `${appUrl}/reservas?payment=success`,
       failureUrl: `${appUrl}/reservas?payment=failure`,
     })

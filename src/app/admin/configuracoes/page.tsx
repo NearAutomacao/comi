@@ -1,27 +1,32 @@
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
+import { createAdminClient } from '@/lib/pb/server'
 import ConfiguracoesClient from '@/components/admin/ConfiguracoesClient'
 
 export default async function ConfiguracoesPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
+  if (!session) redirect('/login')
 
-  const { data: restaurant } = await supabase
-    .from('restaurants')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
+  const restaurantId = session.restaurantId ?? ''
+  const pb = createAdminClient()
 
-  const restaurantId = restaurant?.id
+  let restaurant: any = null
+  try {
+    restaurant = await pb.collection('restaurants').getOne(restaurantId)
+  } catch {}
 
-  const [{ data: workingHours }, { data: closedDates }] = await Promise.all([
-    restaurantId
-      ? supabase.from('working_hours').select('*').eq('restaurant_id', restaurantId).order('day_of_week')
-      : Promise.resolve({ data: [] }),
-    restaurantId
-      ? supabase.from('closed_dates').select('*').eq('restaurant_id', restaurantId).order('date')
-      : Promise.resolve({ data: [] }),
+  const [{ items: workingHours }, { items: closedDates }] = await Promise.all([
+    pb.collection('working_hours').getList(1, 7, {
+      filter: `restaurant_id = "${restaurantId}"`,
+      sort: 'day_of_week',
+    }),
+    pb.collection('closed_dates').getList(1, 100, {
+      filter: `restaurant_id = "${restaurantId}"`,
+      sort: 'date',
+    }),
   ])
 
   return (
@@ -29,8 +34,8 @@ export default async function ConfiguracoesPage() {
       <h1 className="text-2xl font-bold mb-6">Configurações</h1>
       <ConfiguracoesClient
         restaurant={restaurant}
-        initialHours={workingHours ?? []}
-        initialClosedDates={closedDates ?? []}
+        initialHours={workingHours as any}
+        initialClosedDates={closedDates as any}
       />
     </div>
   )

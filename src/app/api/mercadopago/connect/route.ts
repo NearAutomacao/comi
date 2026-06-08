@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { verifyAdminSessionToken } from '@/lib/auth-session'
 
 export async function GET() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const cookieStore = await cookies()
+  const token = cookieStore.get('comi_admin_session')?.value
+  const session = token ? await verifyAdminSessionToken(token) : null
 
-  if (!user) return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_APP_URL!))
+  if (!session) return NextResponse.redirect(new URL('/login', process.env.NEXT_PUBLIC_APP_URL!))
 
   const clientId = process.env.MERCADOPAGO_CLIENT_ID
   if (!clientId) {
@@ -19,7 +21,7 @@ export async function GET() {
   url.searchParams.set('response_type', 'code')
   url.searchParams.set('platform_id', 'mp')
   url.searchParams.set('redirect_uri', redirectUri)
-  url.searchParams.set('state', user.id) // state = user_id para identificar o gerente no callback
+  url.searchParams.set('state', session.userId)
 
   return NextResponse.redirect(url.toString())
 }
