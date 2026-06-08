@@ -27,6 +27,24 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
   const dragMovedRef = useRef(false)
   const supabase = createClient()
 
+  // Busca o pedido aberto mais recente de uma mesa e popula current_order
+  // Usado quando uma mesa fica ocupada mas current_order ainda é null (ex: transferência)
+  async function fetchCurrentOrderForTable(tableId: string) {
+    const { data } = await supabase
+      .from('orders')
+      .select('id, total, status, restaurant_id, table_id, customer_id, payment_status, created_at, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
+      .eq('table_id', tableId)
+      .in('status', ['open', 'preparing', 'served'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (data) {
+      setTables(prev => prev.map(t =>
+        t.id === tableId ? { ...t, status: 'occupied' as const, current_order: data as any } : t
+      ))
+    }
+  }
+
   // Realtime subscription
   useEffect(() => {
     const channel = supabase
@@ -38,7 +56,11 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
             const existing = prev.find(t => t.id === newTable.id)
             if (existing && existing.status !== newTable.status) {
               if (newTable.status === 'occupied') {
-                toast.success(`Mesa ${newTable.number} — cliente sentou`)
+                toast.success(`Mesa ${newTable.number} — ocupada`)
+                // Sem current_order = possível transferência — busca pedidos do banco
+                if (!existing.current_order) {
+                  fetchCurrentOrderForTable(newTable.id)
+                }
               } else if (newTable.status === 'empty') {
                 toast.info(`Mesa ${newTable.number} — comanda fechada`)
               }
@@ -68,6 +90,7 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'comi', table: 'orders' }, payload => {
         const updated = payload.new as { id: string; table_id: string; total: number; status: string }
+        if (['closed', 'cancelled'].includes(updated.status)) return
         setTables(prev => prev.map(t => {
           if (t.id !== updated.table_id) return t
           if (!t.current_order) return t

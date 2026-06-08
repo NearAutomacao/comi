@@ -45,6 +45,23 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
     }
   }, [table.current_order?.id, table.current_order?.status, table.current_order?.total])
 
+  // Fallback: se a mesa está ocupada mas current_order ainda é null (ex: popup aberto logo após
+  // uma transferência antes do realtime propagar), busca o pedido diretamente do banco
+  useEffect(() => {
+    if (table.status !== 'occupied' || table.current_order) return
+    supabase
+      .from('orders')
+      .select('id, total, status, order_items(id, quantity, unit_price, menu_item:menu_items(name))')
+      .eq('table_id', table.id)
+      .in('status', ['open', 'preparing', 'served'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (data) onUpdate({ ...table, current_order: data as any })
+      })
+  }, [table.id, table.status, table.current_order])
+
   async function updateOrderStatus(status: OrderStatus) {
     if (!table.current_order) return
     await supabase.from('orders').update({ status }).eq('id', table.current_order.id)
