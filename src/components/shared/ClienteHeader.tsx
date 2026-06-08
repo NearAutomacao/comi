@@ -40,12 +40,19 @@ export default function ClienteHeader({ userName }: Props) {
         payload => {
           const updated = payload.new as { status: string }
           if (updated.status === 'empty') {
-            clearSession()
-            // Não redireciona se o próprio cliente acabou de fechar a conta (/conta mostra comprovante)
-            if (pathname !== '/conta') {
-              toast.info('Sua mesa foi liberada pelo restaurante.')
-              router.push('/cardapio')
-            }
+            // Aguarda 800ms antes de expulsar: se foi uma troca de mesa, o evento
+            // session-transfer chega nesse intervalo e atualiza tableId no store.
+            // Se tableId no store mudou = transferência → não expulsa.
+            // Se tableId no store ainda é o mesmo = mesa genuinamente liberada → expulsa.
+            setTimeout(() => {
+              const currentTableId = useCartStore.getState().tableId
+              if (!currentTableId || currentTableId !== tableId) return
+              clearSession()
+              if (pathname !== '/conta') {
+                toast.info('Sua mesa foi liberada pelo restaurante.')
+                router.push('/cardapio')
+              }
+            }, 800)
           }
         }
       )
