@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard, MapPin, UtensilsCrossed, ClipboardList,
   Calendar, Package, Settings, LogOut, RefreshCw, Menu,
-  ChevronDown, ChevronLeft, ChevronRight,
+  ChevronDown, ChevronLeft, ChevronRight, Truck,
 } from 'lucide-react'
 import { signOut } from '@/app/actions/auth'
 import { createClient } from '@/lib/pb/client'
@@ -36,6 +36,7 @@ const allNav = [
   { href: '/admin/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
   { href: '/admin/mesas',         label: 'Mapa de mesas', icon: MapPin },
   { href: '/admin/pedidos',       label: 'Pedidos',        icon: ClipboardList },
+  { href: '/admin/delivery',      label: 'Delivery',       icon: Truck },
   { href: '/admin/cardapio',      label: 'Cardápio',       icon: UtensilsCrossed },
   { href: '/admin/reservas',      label: 'Reservas',       icon: Calendar },
   { href: '/admin/estoque',       label: 'Estoque/Custo',  icon: Package },
