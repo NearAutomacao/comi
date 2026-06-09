@@ -1,0 +1,261 @@
+[
+  {
+    "name": "users",
+    "type": "auth",
+    "system": false,
+    "schema": [
+      { "name": "name",          "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "phone",         "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "cpf",           "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "role",          "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["manager","customer"] } },
+      { "name": "restaurant_id", "type": "text",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "",
+    "viewRule": "",
+    "createRule": "",
+    "updateRule": "",
+    "deleteRule": "",
+    "options": {}
+  },
+  {
+    "name": "restaurants",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "owner_id",             "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "name",                 "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "slug",                 "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "logo_url",             "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "address",              "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "mp_access_token",      "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "mp_public_key",        "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "mp_refresh_token",     "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "mp_user_id",           "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "printer_kitchen_host", "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "printer_kitchen_port", "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "printer_bar_host",     "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "printer_bar_port",     "type": "number", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "tables",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "number",        "type": "number", "required": true,  "unique": false, "options": {} },
+      { "name": "capacity",      "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "pos_x",         "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "pos_y",         "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "status",        "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["empty","reserved","occupied"] } },
+      { "name": "guest_name",    "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "guest_phone",   "type": "text",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "table_sessions",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text", "required": true,  "unique": false, "options": {} },
+      { "name": "table_id",      "type": "text", "required": true,  "unique": false, "options": {} },
+      { "name": "guest_name",    "type": "text", "required": false, "unique": false, "options": {} },
+      { "name": "guest_phone",   "type": "text", "required": false, "unique": false, "options": {} },
+      { "name": "sat_at",        "type": "date", "required": false, "unique": false, "options": {} },
+      { "name": "left_at",       "type": "date", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "menu_categories",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "name",          "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "slug",          "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "display_order", "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "printer",       "type": "select", "required": false, "unique": false, "options": { "maxSelect": 1, "values": ["kitchen","bar"] } }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "menu_items",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "category_id",   "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "name",          "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "description",   "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "price",         "type": "number", "required": true,  "unique": false, "options": {} },
+      { "name": "photo_url",     "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "photo",         "type": "file",   "required": false, "unique": false, "options": { "maxSelect": 1, "maxSize": 5242880, "mimeTypes": [], "thumbs": [], "protected": false } },
+      { "name": "available",     "type": "bool",   "required": false, "unique": false, "options": {} },
+      { "name": "display_order", "type": "number", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "cost_items",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "menu_item_id",  "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "ingredient",    "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "quantity",      "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "unit_cost",     "type": "number", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "orders",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id",  "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "table_id",       "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "customer_id",    "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "session_id",     "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "code",           "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "status",         "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["open","preparing","served","closed","cancelled"] } },
+      { "name": "total",          "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "payment_status", "type": "select", "required": false, "unique": false, "options": { "maxSelect": 1, "values": ["pending","paid","refunded"] } },
+      { "name": "delivery_name",  "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "delivery_phone", "type": "text",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "order_items",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "order_id",      "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "menu_item_id",  "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "quantity",      "type": "number", "required": true,  "unique": false, "options": {} },
+      { "name": "unit_price",    "type": "number", "required": true,  "unique": false, "options": {} },
+      { "name": "notes",         "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "status",        "type": "select", "required": false, "unique": false, "options": { "maxSelect": 1, "values": ["pending","preparing","ready","served"] } }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "payments",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id",  "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "order_id",       "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "reservation_id", "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "method",         "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["credit_card","debit_card","pix","cash"] } },
+      { "name": "amount",         "type": "number", "required": true,  "unique": false, "options": {} },
+      { "name": "status",         "type": "select", "required": false, "unique": false, "options": { "maxSelect": 1, "values": ["pending","paid","refunded"] } },
+      { "name": "mercadopago_id", "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "installments",   "type": "number", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "print_jobs",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "order_id",      "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "printer",       "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["kitchen","bar"] } },
+      { "name": "items",         "type": "json",   "required": false, "unique": false, "options": {} },
+      { "name": "table_number",  "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "guest_name",    "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "order_code",    "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "printed_at",    "type": "date",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "order_sequences",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "last_code",     "type": "number", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "working_hours",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "day_of_week",   "type": "number", "required": true,  "unique": false, "options": {} },
+      { "name": "open_time",     "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "close_time",    "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "is_open",       "type": "bool",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "closed_dates",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id", "type": "text", "required": true,  "unique": false, "options": {} },
+      { "name": "date",          "type": "text", "required": true,  "unique": false, "options": {} },
+      { "name": "reason",        "type": "text", "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "reservations",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id",  "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "table_id",       "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "customer_id",    "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "date",           "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "time",           "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "guest_count",    "type": "number", "required": false, "unique": false, "options": {} },
+      { "name": "status",         "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["pending","confirmed","cancelled","completed"] } },
+      { "name": "payment_status", "type": "select", "required": false, "unique": false, "options": { "maxSelect": 1, "values": ["unpaid","paid","refunded"] } },
+      { "name": "payment_id",     "type": "text",   "required": false, "unique": false, "options": {} },
+      { "name": "notes",          "type": "text",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  },
+  {
+    "name": "subscriptions",
+    "type": "base",
+    "system": false,
+    "schema": [
+      { "name": "restaurant_id",     "type": "text",   "required": true,  "unique": false, "options": {} },
+      { "name": "plan",              "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["trial","basic","pro"] } },
+      { "name": "status",            "type": "select", "required": true,  "unique": false, "options": { "maxSelect": 1, "values": ["trial","active","suspended","cancelled"] } },
+      { "name": "starts_at",         "type": "date",   "required": false, "unique": false, "options": {} },
+      { "name": "expires_at",        "type": "date",   "required": false, "unique": false, "options": {} },
+      { "name": "mp_preapproval_id", "type": "text",   "required": false, "unique": false, "options": {} }
+    ],
+    "indexes": [],
+    "listRule": "", "viewRule": "", "createRule": "", "updateRule": "", "deleteRule": ""
+  }
+]

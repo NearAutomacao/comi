@@ -8,7 +8,8 @@ import * as http from 'http'
 import * as os from 'os'
 import { setupUpdater, checkManually, updaterEvents } from './updater'
 import { startPrintAgent, stopPrintAgent, updatePrinterConfig } from './print-agent'
-import { SUPABASE_URL, SUPABASE_ANON_KEY, MESA_SESSION_SECRET, SUPABASE_SERVICE_ROLE_KEY } from './env'
+import { startPocketBase, stopPocketBase } from './pocketbase'
+import { PB_URL, MESA_SESSION_SECRET, AUTH_SESSION_SECRET } from './env'
 
 let isQuitting = false
 
@@ -84,10 +85,10 @@ function startNextServer(): Promise<void> {
         NODE_ENV: 'production',
         LOCAL_IP: getLocalIP(),
         // Vars de runtime necessárias para o servidor Next.js standalone
-        NEXT_PUBLIC_SUPABASE_URL: SUPABASE_URL,
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: SUPABASE_ANON_KEY,
+        PB_URL: PB_URL,
+        NEXT_PUBLIC_PB_URL: PB_URL,
         MESA_SESSION_SECRET: MESA_SESSION_SECRET,
-        SUPABASE_SERVICE_ROLE_KEY: SUPABASE_SERVICE_ROLE_KEY,
+        AUTH_SESSION_SECRET: AUTH_SESSION_SECRET,
       },
       cwd: appDir,
       stdio: 'pipe',
@@ -269,6 +270,7 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null)
 
   try {
+    await startPocketBase()
     await startNextServer()
     createWindow()
     createTray()
@@ -298,6 +300,7 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   isQuitting = true
   stopPrintAgent()
+  stopPocketBase()
   if (nextServerProcess) {
     log.info('[server] Encerrando Next.js...')
     nextServerProcess.kill()

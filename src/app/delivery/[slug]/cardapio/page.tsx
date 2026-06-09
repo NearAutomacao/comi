@@ -59,7 +59,12 @@ export default async function DeliveryCardapioPage({
   const grouped = categories
     .map((cat: any) => ({
       category: cat,
-      items: itemsWithCategory.filter((i: any) => i.category_id === cat.id),
+      items: itemsWithCategory
+        .filter((i: any) => i.category_id === cat.id)
+        .map((i: any) => ({
+          ...i,
+          photo_url: i.photo_url || (i.photo ? pb.files.getURL(i, i.photo) : null),
+        })),
     }))
     .filter(g => g.items.length > 0)
 

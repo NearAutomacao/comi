@@ -1,10 +1,10 @@
 // @ts-nocheck
-import { createClient } from '@supabase/supabase-js'
+import PocketBase from 'pocketbase'
 import * as net from 'net'
 import log from 'electron-log'
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from './env'
+import { PB_URL } from './env'
 
-let channel = null
+let pollTimer = null
 let currentRestaurantId = null
 let printerConfig = { kitchenHost: '', kitchenPort: 9100, barHost: '', barPort: 9100 }
 
@@ -64,46 +64,36 @@ async function sendToPrinter(host, port, data) {
   })
 }
 
-async function processJob(supabase, job) {
+async function processJob(pb, job) {
   log.info(`[print-agent] Processando job ${job.id} → ${job.printer}`)
   const host = job.printer === 'kitchen' ? printerConfig.kitchenHost : printerConfig.barHost
   const port = job.printer === 'kitchen' ? printerConfig.kitchenPort : printerConfig.barPort
   await sendToPrinter(host, port, buildTicket(job))
-  await supabase
-    .schema('comi')
-    .from('print_jobs')
-    .update({ printed_at: new Date().toISOString() })
-    .eq('id', job.id)
+  await pb.collection('print_jobs').update(job.id, { printed_at: new Date().toISOString() })
   log.info(`[print-agent] Job ${job.id} impresso`)
 }
 
-async function processPendingJobs(supabase, restaurantId) {
-  const { data: jobs } = await supabase
-    .schema('comi')
-    .from('print_jobs')
-    .select('*')
-    .eq('restaurant_id', restaurantId)
-    .is('printed_at', null)
-    .order('created_at')
-
-  if (!jobs?.length) return
-  log.info(`[print-agent] ${jobs.length} job(s) pendente(s)`)
-  for (const job of jobs) {
-    await processJob(supabase, job).catch(err =>
-      log.error(`[print-agent] Erro job ${job.id}:`, err)
-    )
+async function processPendingJobs(pb, restaurantId) {
+  try {
+    const { items: jobs } = await pb.collection('print_jobs').getList(1, 50, {
+      filter: `restaurant_id = "${restaurantId}" && printed_at = null`,
+      sort: 'created',
+    })
+    if (!jobs.length) return
+    log.info(`[print-agent] ${jobs.length} job(s) pendente(s)`)
+    for (const job of jobs) {
+      await processJob(pb, job).catch(err =>
+        log.error(`[print-agent] Erro job ${job.id}:`, err)
+      )
+    }
+  } catch (err) {
+    log.warn('[print-agent] Erro ao buscar jobs:', err?.message)
   }
 }
 
-async function loadPrinterConfig(supabase, restaurantId) {
-  const { data } = await supabase
-    .schema('comi')
-    .from('restaurants')
-    .select('printer_kitchen_host, printer_kitchen_port, printer_bar_host, printer_bar_port')
-    .eq('id', restaurantId)
-    .single()
-
-  if (data) {
+async function loadPrinterConfig(pb, restaurantId) {
+  try {
+    const data = await pb.collection('restaurants').getOne(restaurantId)
     printerConfig = {
       kitchenHost: data.printer_kitchen_host ?? '',
       kitchenPort: data.printer_kitchen_port ?? 9100,
@@ -111,12 +101,16 @@ async function loadPrinterConfig(supabase, restaurantId) {
       barPort: data.printer_bar_port ?? 9100,
     }
     log.info('[print-agent] Config:', printerConfig)
+  } catch (err) {
+    log.warn('[print-agent] Erro ao carregar config de impressora:', err?.message)
   }
 }
 
 export function stopPrintAgent() {
-  channel?.unsubscribe()
-  channel = null
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
   currentRestaurantId = null
   log.info('[print-agent] Parado')
 }
@@ -127,29 +121,19 @@ export async function startPrintAgent(restaurantId) {
   currentRestaurantId = restaurantId
   log.info('[print-agent] Iniciando para', restaurantId)
 
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    log.warn('[print-agent] Credenciais não configuradas')
-    return
-  }
+  const pb = new PocketBase(PB_URL)
+  pb.autoCancellation(false)
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  await loadPrinterConfig(pb, restaurantId)
 
-  await loadPrinterConfig(supabase, restaurantId)
-  await processPendingJobs(supabase, restaurantId)
+  // Processa jobs pendentes imediatamente na inicialização
+  await processPendingJobs(pb, restaurantId)
 
-  channel = supabase
-    .channel(`print-jobs-${restaurantId}`)
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'comi',
-      table: 'print_jobs',
-      filter: `restaurant_id=eq.${restaurantId}`,
-    }, payload => {
-      processJob(supabase, payload.new).catch(err =>
-        log.error('[print-agent] Erro realtime:', err)
-      )
-    })
-    .subscribe(status => log.info('[print-agent] Realtime:', status))
+  // Polling a cada 3 segundos para novos jobs não impressos
+  pollTimer = setInterval(async () => {
+    if (currentRestaurantId !== restaurantId) return
+    await processPendingJobs(pb, restaurantId)
+  }, 3000)
 }
 
 export function updatePrinterConfig(config) {

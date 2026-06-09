@@ -4,8 +4,8 @@
   "description": "COMI — Sistema de Gestão para Restaurantes",
   "main": "dist/main.js",
   "scripts": {
-    "dev": "concurrently \"npm run dev:next\" \"wait-on http://localhost:3100 && electron .\"",
-    "dev:next": "cross-env PORT=3100 node ../node_modules/.bin/next dev ..",
+    "dev": "concurrently \"npm run dev:next\" \"npm run build:ts && wait-on http://localhost:3100 && electron .\"",
+    "dev:next": "cross-env PORT=3100 node ../node_modules/next/dist/bin/next dev ..",
     "build:ts": "tsc",
     "dist": "tsc && electron-builder --win --x64"
   },
@@ -22,7 +22,14 @@
       "package.json"
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "assets/icon.ico"
     },
     "nsis": {
@@ -40,34 +47,45 @@
     },
     "extraResources": [
       {
+        "from": "assets/pocketbase",
+        "to": "pocketbase",
+        "filter": ["**/*"]
+      },
+      {
         "from": "../.next/standalone",
         "to": "app",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../.next/static",
         "to": "app/.next/static",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "../public",
         "to": "app/public",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.4",
+    "electron-log": "^5.2.4",
     "electron-updater": "^6.3.9",
-    "electron-log": "^5.2.4"
+    "pocketbase": "^0.22.1"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
     "typescript": "^5.7.3",
-    "wait-on": "^8.0.3",
-    "@types/node": "^22.0.0"
+    "wait-on": "^8.0.3"
   }
 }

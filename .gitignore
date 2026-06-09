@@ -46,3 +46,12 @@ comi-desktop/src/env.ts
 comi-desktop/dist/
 comi-desktop/release/
 comi-desktop/node_modules/
+
+# PocketBase — dados locais e binário (não commitar)
+comi-desktop/pb_data/
+comi-desktop/assets/pocketbase/
+
+# Documentos com senhas — nunca subir no GitHub
+PASSO A PASSO.md
+PLATAFORMAS.md
+REFERENCIA.md
