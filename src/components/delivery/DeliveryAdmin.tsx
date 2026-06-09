@@ -98,6 +98,7 @@ export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrd
     if (!restaurantId) return
     const pb = pbRef.current
     let unsub: (() => void) | null = null
+    let realtimeOk = false
 
     pb.collection('orders').subscribe('*', async event => {
       if (event.action !== 'create') return
@@ -126,10 +127,21 @@ export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrd
         duration: 10000,
       })
     }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(u => { unsub = u })
+      .then(u => { unsub = u; realtimeOk = true })
       .catch(() => {})
 
-    return () => { unsub?.() }
+    // Fallback: polling a cada 20s caso o realtime falhe
+    const interval = setInterval(async () => {
+      if (realtimeOk) return
+      try {
+        const res = await fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        setOrders(data.orders ?? [])
+      } catch {}
+    }, 20000)
+
+    return () => { unsub?.(); clearInterval(interval) }
   }, [restaurantId])
 
   const ordersByStatus = (status: OrderStatus) => orders.filter(o => o.status === status)

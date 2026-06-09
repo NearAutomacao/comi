@@ -13,6 +13,11 @@ const nextConfig: NextConfig = {
         hostname: '**',
         pathname: '/api/files/**',
       },
+      {
+        protocol: 'https',
+        hostname: '**',
+        pathname: '/api/files/**',
+      },
     ],
   },
   async headers() {
