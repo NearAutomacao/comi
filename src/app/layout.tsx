@@ -28,10 +28,20 @@ export const viewport: Viewport = {
   initialScale: 1,
 }
 
+const PB_URL = process.env.PB_URL ?? 'http://127.0.0.1:8090'
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full`}>
+        {/* Injeta URL do PocketBase para o cliente browser — não sobrescreve se o Electron já definiu */}
+        <Script
+          id="comi-config"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `window.__COMI_CONFIG__=window.__COMI_CONFIG__||{};if(!window.__COMI_CONFIG__.pbUrl)window.__COMI_CONFIG__.pbUrl=${JSON.stringify(PB_URL)};`,
+          }}
+        />
         {children}
         <Toaster richColors position="top-right" />
         <Script

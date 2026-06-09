@@ -3,6 +3,15 @@ import { createMesaSessionToken } from '@/lib/mesa-session'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
+  try {
+    return await handlePost(req)
+  } catch (err: any) {
+    console.error('[POST /api/mesa/sit] erro:', err?.message)
+    return NextResponse.json({ error: err?.message ?? 'Erro interno' }, { status: 500 })
+  }
+}
+
+async function handlePost(req: Request) {
   const { tableId, guestName, guestPhone } = await req.json()
   const isHttps = req.headers.get('x-forwarded-proto') === 'https' || req.url.startsWith('https://')
 
@@ -73,3 +82,4 @@ export async function POST(req: Request) {
 
   return response
 }
+

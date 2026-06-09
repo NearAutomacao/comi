@@ -26,31 +26,38 @@ export default async function CardapioPage() {
     } catch {}
   }
 
-  const [{ items: categories }, { items: allItems }, { items: workingHours }, { items: closedDates }] =
-    restaurantId
-      ? await Promise.all([
-          pb.collection('menu_categories').getList(1, 100, {
-            filter: `restaurant_id = "${restaurantId}"`,
-            sort: 'display_order',
-          }),
-          pb.collection('menu_items').getList(1, 500, {
-            filter: `restaurant_id = "${restaurantId}" && available = true`,
-            sort: 'display_order',
-          }),
-          pb.collection('working_hours').getList(1, 7, {
-            filter: `restaurant_id = "${restaurantId}"`,
-            sort: 'day_of_week',
-          }),
-          pb.collection('closed_dates').getList(1, 100, {
-            filter: `restaurant_id = "${restaurantId}"`,
-          }),
-        ])
-      : [
-          { items: [] },
-          { items: [] },
-          { items: [] },
-          { items: [] },
-        ]
+  let categories: any[] = []
+  let allItems: any[] = []
+  let workingHours: any[] = []
+  let closedDates: any[] = []
+
+  if (restaurantId) {
+    try {
+      const [r1, r2, r3, r4] = await Promise.all([
+        pb.collection('menu_categories').getList(1, 100, {
+          filter: `restaurant_id = "${restaurantId}"`,
+          sort: 'display_order',
+        }),
+        pb.collection('menu_items').getList(1, 500, {
+          filter: `restaurant_id = "${restaurantId}" && available = true`,
+          sort: 'display_order',
+        }),
+        pb.collection('working_hours').getList(1, 7, {
+          filter: `restaurant_id = "${restaurantId}"`,
+          sort: 'day_of_week',
+        }),
+        pb.collection('closed_dates').getList(1, 100, {
+          filter: `restaurant_id = "${restaurantId}"`,
+        }),
+      ])
+      categories = r1.items
+      allItems = r2.items
+      workingHours = r3.items
+      closedDates = r4.items
+    } catch (err) {
+      console.error('[cardapio cliente] erro ao buscar dados:', err)
+    }
+  }
 
   // Enriquece itens com categoria
   const itemsWithCategory = allItems.map((item: any) => ({

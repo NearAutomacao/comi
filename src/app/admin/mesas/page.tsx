@@ -14,10 +14,16 @@ export default async function MesasAdminPage() {
   const pb = createAdminClient()
 
   // Busca mesas
-  const { items: tables } = await pb.collection('tables').getList(1, 100, {
-    filter: `restaurant_id = "${restaurantId}"`,
-    sort: 'number',
-  })
+  let tables: any[] = []
+  try {
+    const result = await pb.collection('tables').getList(1, 100, {
+      filter: `restaurant_id = "${restaurantId}"`,
+      sort: 'number',
+    })
+    tables = result.items
+  } catch (err) {
+    console.error('[mesas] erro ao buscar mesas:', err)
+  }
 
   // Para cada mesa ocupada, busca pedido aberto
   const tablesWithOrder = await Promise.all(

@@ -13,24 +13,36 @@ export default async function CardapioAdminPage() {
   const restaurantId = session.restaurantId ?? ''
   const pb = createAdminClient()
 
-  const [{ items: categories }, { items: items }] = await Promise.all([
-    pb.collection('menu_categories').getList(1, 100, {
-      filter: `restaurant_id = "${restaurantId}"`,
-      sort: 'display_order',
-    }),
-    pb.collection('menu_items').getList(1, 500, {
-      filter: `restaurant_id = "${restaurantId}"`,
-      sort: 'display_order',
-    }),
-  ])
+  let categories: any[] = []
+  let items: any[] = []
+  try {
+    const [catResult, itemResult] = await Promise.all([
+      pb.collection('menu_categories').getList(1, 100, {
+        filter: `restaurant_id = "${restaurantId}"`,
+        sort: 'display_order',
+      }),
+      pb.collection('menu_items').getList(1, 500, {
+        filter: `restaurant_id = "${restaurantId}"`,
+        sort: 'display_order',
+      }),
+    ])
+    categories = catResult.items
+    items = itemResult.items
+  } catch (err) {
+    console.error('[cardapio admin] erro ao buscar dados:', err)
+  }
 
   // Busca cost_items para cada menu_item
   const itemsWithCosts = await Promise.all(
     items.map(async (item: any) => {
-      const { items: costItems } = await pb.collection('cost_items').getList(1, 50, {
-        filter: `menu_item_id = "${item.id}"`,
-      })
-      return { ...item, cost_items: costItems }
+      try {
+        const { items: costItems } = await pb.collection('cost_items').getList(1, 50, {
+          filter: `menu_item_id = "${item.id}"`,
+        })
+        return { ...item, cost_items: costItems }
+      } catch {
+        return { ...item, cost_items: [] }
+      }
     })
   )
 

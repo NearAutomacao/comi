@@ -18,16 +18,24 @@ export default async function ConfiguracoesPage() {
     restaurant = await pb.collection('restaurants').getOne(restaurantId)
   } catch {}
 
-  const [{ items: workingHours }, { items: closedDates }] = await Promise.all([
-    pb.collection('working_hours').getList(1, 7, {
-      filter: `restaurant_id = "${restaurantId}"`,
-      sort: 'day_of_week',
-    }),
-    pb.collection('closed_dates').getList(1, 100, {
-      filter: `restaurant_id = "${restaurantId}"`,
-      sort: 'date',
-    }),
-  ])
+  let workingHours: any[] = []
+  let closedDates: any[] = []
+  try {
+    const [hoursResult, datesResult] = await Promise.all([
+      pb.collection('working_hours').getList(1, 7, {
+        filter: `restaurant_id = "${restaurantId}"`,
+        sort: 'day_of_week',
+      }),
+      pb.collection('closed_dates').getList(1, 100, {
+        filter: `restaurant_id = "${restaurantId}"`,
+        sort: 'date',
+      }),
+    ])
+    workingHours = hoursResult.items
+    closedDates = datesResult.items
+  } catch (err) {
+    console.error('[configuracoes] erro ao buscar dados:', err)
+  }
 
   return (
     <div className="p-4 md:p-6 mt-14 md:mt-0">

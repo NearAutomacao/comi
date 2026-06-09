@@ -3,6 +3,15 @@ import { NextResponse } from 'next/server'
 
 // POST /api/orders/items — adiciona itens a um pedido existente
 export async function POST(req: Request) {
+  try {
+    return await handlePost(req)
+  } catch (err: any) {
+    console.error('[POST /api/orders/items] erro:', err?.message)
+    return NextResponse.json({ error: err?.message ?? 'Erro interno' }, { status: 500 })
+  }
+}
+
+async function handlePost(req: Request) {
   const { orderId, restaurantId, items } = await req.json() as {
     orderId: string
     restaurantId: string
@@ -91,3 +100,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, newTotal })
 }
+

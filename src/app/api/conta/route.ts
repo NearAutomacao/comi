@@ -3,47 +3,58 @@ import { NextResponse } from 'next/server'
 
 // GET /api/conta?tableId=xxx
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const tableId = searchParams.get('tableId')
-  if (!tableId) return NextResponse.json({ error: 'tableId required' }, { status: 400 })
+  try {
+    const { searchParams } = new URL(req.url)
+    const tableId = searchParams.get('tableId')
+    if (!tableId) return NextResponse.json({ error: 'tableId required' }, { status: 400 })
 
-  const pb = createAdminClient()
+    const pb = createAdminClient()
 
-  const { items: orders } = await pb.collection('orders').getList(1, 50, {
-    filter: `table_id = "${tableId}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
-    sort: 'created',
-  })
+    const { items: orders } = await pb.collection('orders').getList(1, 50, {
+      filter: `table_id = "${tableId}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
+      sort: 'created',
+    })
 
-  // Busca itens de cada pedido
-  const ordersWithItems = await Promise.all(
-    orders.map(async (order: any) => {
-      const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
-        filter: `order_id = "${order.id}"`,
+    // Busca itens de cada pedido
+    const ordersWithItems = await Promise.all(
+      orders.map(async (order: any) => {
+        let orderItems: any[] = []
+        try {
+          const result = await pb.collection('order_items').getList(1, 100, {
+            filter: `order_id = "${order.id}"`,
+          })
+          orderItems = result.items
+        } catch {}
+        const enrichedItems = await Promise.all(
+          orderItems.map(async (item: any) => {
+            let menuItem: any = null
+            try {
+              menuItem = await pb.collection('menu_items').getOne(item.menu_item_id)
+            } catch {}
+            return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+          })
+        )
+        return { ...order, order_items: enrichedItems }
       })
-      const enrichedItems = await Promise.all(
-        orderItems.map(async (item: any) => {
-          let menuItem: any = null
-          try {
-            menuItem = await pb.collection('menu_items').getOne(item.menu_item_id)
-          } catch {}
-          return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
+    )
+
+    // Busca nomes das sessões
+    const sessionIds = [...new Set(orders.map((o: any) => o.session_id).filter(Boolean))] as string[]
+    let sessions: { id: string; guest_name: string }[] = []
+    if (sessionIds.length > 0) {
+      try {
+        const { items } = await pb.collection('table_sessions').getList(1, 50, {
+          filter: inFilter('id', sessionIds),
         })
-      )
-      return { ...order, order_items: enrichedItems }
-    })
-  )
+        sessions = items.map((s: any) => ({ id: s.id, guest_name: s.guest_name }))
+      } catch {}
+    }
 
-  // Busca nomes das sessões
-  const sessionIds = [...new Set(orders.map((o: any) => o.session_id).filter(Boolean))] as string[]
-  let sessions: { id: string; guest_name: string }[] = []
-  if (sessionIds.length > 0) {
-    const { items } = await pb.collection('table_sessions').getList(1, 50, {
-      filter: inFilter('id', sessionIds),
-    })
-    sessions = items.map((s: any) => ({ id: s.id, guest_name: s.guest_name }))
+    return NextResponse.json({ orders: ordersWithItems, sessions })
+  } catch (err: any) {
+    console.error('[GET /api/conta] erro:', err?.message)
+    return NextResponse.json({ error: err?.message ?? 'Erro interno' }, { status: 500 })
   }
-
-  return NextResponse.json({ orders: ordersWithItems, sessions })
 }
 
 // POST /api/conta
