@@ -1,10 +1,47 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { unstable_cache } from 'next/cache'
 import { verifyDeliverySessionToken } from '@/lib/delivery-session'
 import { createAdminClient } from '@/lib/pb/server'
 import DeliveryMenu from '@/components/delivery/DeliveryMenu'
 
-export const revalidate = 0
+export const dynamic = 'force-dynamic'
+
+const PB_URL = process.env.PB_URL ?? 'http://127.0.0.1:8090'
+
+const getMenuData = unstable_cache(
+  async (restaurantId: string) => {
+    const pb = createAdminClient()
+    const [catResult, itemResult] = await Promise.all([
+      pb.collection('menu_categories').getList(1, 100, {
+        filter: `restaurant_id = "${restaurantId}"`,
+        sort: 'display_order',
+      }),
+      pb.collection('menu_items').getList(1, 500, {
+        filter: `restaurant_id = "${restaurantId}" && available = true`,
+        sort: 'display_order',
+      }),
+    ])
+    return {
+      categories: catResult.items as any[],
+      items: itemResult.items as any[],
+    }
+  },
+  ['delivery-menu'],
+  { revalidate: 60 }
+)
+
+const getRestaurantBySlug = unstable_cache(
+  async (slug: string) => {
+    const pb = createAdminClient()
+    const { items } = await pb.collection('restaurants').getList(1, 1, {
+      filter: `slug = "${slug}"`,
+    })
+    return (items[0] as any) ?? null
+  },
+  ['delivery-restaurant'],
+  { revalidate: 120 }
+)
 
 export default async function DeliveryCardapioPage({
   params,
@@ -25,42 +62,16 @@ export default async function DeliveryCardapioPage({
     redirect(`/delivery/${slug}/acompanhar`)
   }
 
-  const pb = createAdminClient()
-
-  let restaurant: any = null
-  let categories: any[] = []
-  let items: any[] = []
-
-  try {
-    const { items: restaurants } = await pb.collection('restaurants').getList(1, 1, {
-      filter: `slug = "${slug}"`,
-    })
-    restaurant = restaurants[0] ?? null
-  } catch {}
+  const restaurant = await getRestaurantBySlug(slug).catch(() => null)
 
   if (!restaurant) redirect(`/delivery/${slug}`)
 
-  try {
-    const [catResult, itemResult] = await Promise.all([
-      pb.collection('menu_categories').getList(1, 100, {
-        filter: `restaurant_id = "${restaurant.id}"`,
-        sort: 'display_order',
-      }),
-      pb.collection('menu_items').getList(1, 500, {
-        filter: `restaurant_id = "${restaurant.id}" && available = true`,
-        sort: 'display_order',
-      }),
-    ])
-    categories = catResult.items
-    items = itemResult.items
-  } catch {}
+  const { categories, items } = await getMenuData(restaurant.id).catch(() => ({ categories: [], items: [] }))
 
   const itemsWithCategory = items.map((item: any) => ({
     ...item,
     category: categories.find((c: any) => c.id === item.category_id) ?? null,
   }))
-
-  const pbUrl = process.env.PB_URL ?? 'http://127.0.0.1:8090'
 
   const grouped = categories
     .map((cat: any) => ({
@@ -70,7 +81,7 @@ export default async function DeliveryCardapioPage({
         .map((i: any) => ({
           ...i,
           photo_url: i.photo_url ||
-            (i.photo ? `${pbUrl}/api/files/${i.collectionId}/${i.id}/${i.photo}` : null),
+            (i.photo ? `${PB_URL}/api/files/${i.collectionId}/${i.id}/${i.photo}` : null),
         })),
     }))
     .filter(g => g.items.length > 0)

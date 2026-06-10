@@ -457,7 +457,15 @@ export default function DeliveryMenu({ slug, restaurantName, guestName, grouped,
         {grouped.length === 0 && (
           <div className="text-center py-20 text-gray-400">
             <ShoppingBag size={48} className="mx-auto mb-3 text-gray-200" />
-            <p>Cardápio em breve</p>
+            <p className="font-medium">Nenhum item disponível</p>
+            <p className="text-sm mt-1">O cardápio pode estar sendo atualizado.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-orange-500 hover:text-orange-600 border border-orange-300 rounded-full px-4 py-1.5 transition-colors"
+            >
+              <RefreshCw size={14} />
+              Recarregar cardápio
+            </button>
           </div>
         )}
 
