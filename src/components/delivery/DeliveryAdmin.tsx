@@ -18,7 +18,8 @@ interface DeliveryOrder {
   total: number
   delivery_name: string
   delivery_phone: string
-  created: string
+  placed_at: string | null
+  created: string | null
   order_items: { quantity: number; unit_price: number; menu_item: { name: string } | null }[]
 }
 
@@ -140,7 +141,7 @@ export default function DeliveryAdmin({ restaurantId, slug: initialSlug, initial
         )
       } catch {}
 
-      const newOrder = { ...order, order_items: orderItems }
+      const newOrder = { ...order, placed_at: order.placed_at || new Date().toISOString(), order_items: orderItems }
       setOrders(prev => [newOrder, ...prev])
 
       const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
@@ -238,7 +239,9 @@ export default function DeliveryAdmin({ restaurantId, slug: initialSlug, initial
                           <p className="font-semibold text-gray-800 text-sm">{order.delivery_name}</p>
                         </div>
                         <span className="text-xs text-gray-400 shrink-0">
-                          {order.created ? format(new Date(order.created), 'HH:mm', { locale: ptBR }) : ''}
+                          {(order.placed_at || order.created)
+                            ? format(new Date((order.placed_at || order.created)!), 'HH:mm', { locale: ptBR })
+                            : ''}
                         </span>
                       </div>
 

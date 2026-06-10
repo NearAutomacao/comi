@@ -79,6 +79,7 @@ async function handlePost(req: Request) {
     payment_status: 'pending',
     delivery_name: guestName,
     delivery_phone: guestPhone,
+    placed_at: new Date().toISOString(),
   })
 
   // Insere os itens
