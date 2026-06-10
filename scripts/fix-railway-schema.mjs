@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const PB = 'https://pocketbase-production-3f40.up.railway.app'
+const PB = 'https://pocketbase-production-a80c.up.railway.app'
 
 const SCHEMAS = {
   restaurants: [

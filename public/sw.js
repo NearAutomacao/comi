@@ -13,7 +13,7 @@ if (isLocal) {
   })
 } else {
   // Produção: comportamento normal de cache offline
-  const CACHE = 'comi-v4'
+  const CACHE = 'comi-v5'
   const PRECACHE = ['/manifest.json', '/icomi-nobg.png', '/icon-192.png', '/icon-512.png']
 
   self.addEventListener('install', e => {

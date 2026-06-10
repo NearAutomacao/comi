@@ -3,7 +3,7 @@
  * Corrige o schema do Railway PocketBase v0.22.
  * Usa o formato correto de `fields` (não `schema`) do v0.22.
  */
-const PB = 'https://pocketbase-production-3f40.up.railway.app'
+const PB = 'https://pocketbase-production-a80c.up.railway.app'
 const ADMIN_EMAIL = 'contato@nearautomacao.com'
 const ADMIN_PASS  = 'Cvale@2018'
 const USER_ID     = '4njqu0i4drgozw9' // luan3d@hotmail.com

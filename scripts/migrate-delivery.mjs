@@ -6,7 +6,7 @@
  *   node scripts/migrate-delivery.mjs --email SEU_EMAIL --password SUA_SENHA
  *
  * Opcional:
- *   --url https://pocketbase-production-3f40.up.railway.app
+ *   --url https://pocketbase-production-a80c.up.railway.app
  */
 
 const args = process.argv.slice(2)
