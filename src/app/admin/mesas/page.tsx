@@ -32,7 +32,7 @@ export default async function MesasAdminPage() {
       try {
         const { items: orders } = await pb.collection('orders').getList(1, 1, {
           filter: `table_id = "${table.id}" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
-          sort: '-created',
+          sort: '-code',
         })
         if (!orders.length) return { ...table, current_order: null }
         const order = orders[0]

@@ -29,7 +29,7 @@ export default async function PedidosPage() {
   try {
     const { items } = await pb.collection('orders').getList(1, 20, {
       filter: `customer_id = "${session.userId}"`,
-      sort: '-created',
+      sort: '-code',
     })
 
     orders = await Promise.all(

@@ -33,7 +33,7 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
     try {
       const { items: orders } = await pb.collection('orders').getList(1, 1, {
         filter: `table_id = "${tableId}" && (status = "open" || status = "preparing" || status = "served")`,
-        sort: '-created',
+        sort: '-code',
       })
       if (!orders.length) return
       const order = orders[0]

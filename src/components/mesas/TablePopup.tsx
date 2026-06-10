@@ -50,7 +50,7 @@ export default function TablePopup({ table, onClose, onUpdate }: Props) {
     const pb = pbRef.current
     pb.collection('orders').getList(1, 1, {
       filter: `table_id = "${table.id}" && (status = "open" || status = "preparing" || status = "served")`,
-      sort: '-created',
+      sort: '-code',
     }).then(async ({ items }) => {
       if (!items.length) return
       const order = items[0]
