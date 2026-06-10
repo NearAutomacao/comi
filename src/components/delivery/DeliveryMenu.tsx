@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ShoppingBag, Plus, Minus, X, CheckCircle, Loader2, ChevronRight } from 'lucide-react'
+import { ShoppingBag, Plus, Minus, X, Loader2, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface MenuItem {
@@ -31,13 +32,13 @@ interface Props {
   grouped: Group[]
 }
 
-type Step = 'menu' | 'checkout' | 'success'
+type Step = 'menu' | 'checkout'
 
 export default function DeliveryMenu({ slug, restaurantName, guestName, grouped }: Props) {
+  const router = useRouter()
   const [cart, setCart] = useState<CartItem[]>([])
   const [step, setStep] = useState<Step>('menu')
   const [loading, setLoading] = useState(false)
-  const [orderCode, setOrderCode] = useState<number | null>(null)
   const [error, setError] = useState('')
   const categoryRefs = useRef<Record<string, HTMLElement | null>>({})
 
@@ -90,58 +91,12 @@ export default function DeliveryMenu({ slug, restaurantName, guestName, grouped 
         setLoading(false)
         return
       }
-      setOrderCode(data.orderCode)
-      setStep('success')
+      router.push(`/delivery/${slug}/acompanhar`)
     } catch {
       setError('Erro de conexão. Tente novamente.')
     } finally {
       setLoading(false)
     }
-  }
-
-  // ── TELA DE SUCESSO ────────────────────────────────────────
-  if (step === 'success') {
-    return (
-      <main className="min-h-screen bg-gradient-to-b from-green-50 to-white flex flex-col items-center justify-center px-4 py-12">
-        <div className="w-full max-w-sm text-center">
-          <div className="w-24 h-24 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle size={48} className="text-green-500" />
-          </div>
-          <h1 className="text-2xl font-black text-gray-800 mb-2">Pedido enviado!</h1>
-          {orderCode && (
-            <p className="text-lg font-bold text-orange-500 mb-3">
-              #{String(orderCode).padStart(3, '0')}
-            </p>
-          )}
-          <p className="text-gray-500 mb-8">
-            Olá, <strong>{guestName.split(' ')[0]}</strong>! Seu pedido foi recebido e em breve será preparado e entregue.
-          </p>
-
-          <div className="bg-white rounded-2xl border shadow-sm p-4 mb-6 text-left">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Resumo</p>
-            <ul className="space-y-2">
-              {cart.map(c => (
-                <li key={c.item.id} className="flex justify-between text-sm">
-                  <span className="text-gray-700">{c.quantity}× {c.item.name}</span>
-                  <span className="font-medium">{formatCurrency(c.item.price * c.quantity)}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="border-t mt-3 pt-3 flex justify-between font-bold">
-              <span>Total</span>
-              <span className="text-orange-600">{formatCurrency(total)}</span>
-            </div>
-          </div>
-
-          <Button
-            onClick={() => { setCart([]); setStep('menu') }}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-white h-12 font-semibold"
-          >
-            Fazer outro pedido
-          </Button>
-        </div>
-      </main>
-    )
   }
 
   // ── TELA DE CHECKOUT ───────────────────────────────────────

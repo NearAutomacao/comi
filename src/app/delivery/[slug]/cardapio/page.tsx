@@ -21,6 +21,10 @@ export default async function DeliveryCardapioPage({
     redirect(`/delivery/${slug}`)
   }
 
+  if (session.orderId) {
+    redirect(`/delivery/${slug}/acompanhar`)
+  }
+
   const pb = createAdminClient()
 
   let restaurant: any = null

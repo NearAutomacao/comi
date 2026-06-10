@@ -9,6 +9,7 @@ export interface DeliverySessionPayload {
   restaurantSlug: string
   guestName: string
   guestPhone: string
+  orderId?: string | null
   iat?: number
   exp?: number
 }

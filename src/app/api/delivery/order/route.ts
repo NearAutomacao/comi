@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/pb/server'
-import { verifyDeliverySessionToken } from '@/lib/delivery-session'
+import { verifyDeliverySessionToken, createDeliverySessionToken } from '@/lib/delivery-session'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
@@ -125,5 +125,22 @@ async function handlePost(req: Request) {
     } catch {}
   }
 
-  return NextResponse.json({ ok: true, orderCode, orderId: order.id })
+  const isHttps = req.headers.get('x-forwarded-proto') === 'https' || req.url.startsWith('https://')
+  const updatedToken = await createDeliverySessionToken({
+    restaurantId: session.restaurantId,
+    restaurantSlug: session.restaurantSlug,
+    guestName: session.guestName,
+    guestPhone: session.guestPhone,
+    orderId: order.id,
+  })
+
+  const res = NextResponse.json({ ok: true, orderCode, orderId: order.id })
+  res.cookies.set('delivery_session', updatedToken, {
+    path: '/',
+    maxAge: 60 * 60 * 4,
+    httpOnly: true,
+    secure: isHttps,
+    sameSite: 'lax',
+  })
+  return res
 }
