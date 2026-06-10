@@ -64,11 +64,11 @@ export default function AdminSidebar({ managerName, restaurantName: initialResta
       .catch(() => {})
   }, [restaurantId, restaurantName])
 
-  // Ref para evitar closure desatualizado dentro dos callbacks de subscribe
   const pathnameRef = useRef(pathname)
   useEffect(() => { pathnameRef.current = pathname }, [pathname])
 
-  // IDs de pedidos delivery já notificados (evita duplicatas entre realtime e polling)
+  // IDs já notificados — evita duplicatas no polling
+  const seenOrderIdsRef    = useRef<Set<string>>(new Set())
   const seenDeliveryIdsRef = useRef<Set<string>>(new Set())
 
   const initials = managerName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
@@ -84,89 +84,59 @@ export default function AdminSidebar({ managerName, restaurantName: initialResta
     electronAPI()?.onUpdateDownloaded(version => setUpdateVersion(version))
   }, [])
 
-  useEffect(() => {
-    if (!restaurantId) return
-    const pb = pbRef.current
-    let unsubscribe: (() => void) | null = null
-    pb.collection('tables').subscribe('*', event => {
-      if (event.action !== 'update') return
-      const updated = event.record
-      if (updated.restaurant_id !== restaurantId) return
-      if (updated.status === 'occupied' && pathnameRef.current !== '/admin/mesas') {
-        toast(`Mesa ${updated.number} ocupada`, {
-          description: updated.guest_name ? `Cliente: ${updated.guest_name}` : undefined,
-          icon: '🪑',
-        })
-        setMesasBadge(n => n + 1)
-      }
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => { unsubscribe = unsub })
-      .catch(() => {})
-    return () => { unsubscribe?.() }
-  }, [restaurantId])
-
+  // Polling unificado — sem realtime (SSE não funciona no Railway)
   useEffect(() => {
     if (!restaurantId) return
 
-    // Marca pedidos delivery já existentes como vistos (não notifica sobre eles)
-    fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
-      .then(r => r.json())
-      .then(data => (data.orders ?? []).forEach((o: any) => seenDeliveryIdsRef.current.add(o.id)))
-      .catch(() => {})
+    async function poll() {
+      try {
+        const [deliveryRes, pedidosRes] = await Promise.all([
+          fetch(`/api/delivery/orders?restaurantId=${restaurantId}`),
+          fetch(`/api/pedidos?restaurantId=${restaurantId}`),
+        ])
 
-    const pb = pbRef.current
-    let unsubscribe: (() => void) | null = null
+        if (deliveryRes.ok) {
+          const { orders = [] } = await deliveryRes.json()
+          for (const order of orders) {
+            if (seenDeliveryIdsRef.current.has(order.id)) continue
+            seenDeliveryIdsRef.current.add(order.id)
+            const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
+            toast('🛵 Novo pedido delivery!', {
+              description: [order.delivery_name, code].filter(Boolean).join(' · '),
+              duration: 10000,
+            })
+            if (pathnameRef.current !== '/admin/delivery') setDeliveryBadge(n => n + 1)
+          }
+        }
 
-    const notifyDelivery = (order: any) => {
-      if (seenDeliveryIdsRef.current.has(order.id)) return
-      seenDeliveryIdsRef.current.add(order.id)
-      const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
-      toast('🛵 Novo pedido delivery!', {
-        description: [order.delivery_name, code].filter(Boolean).join(' · '),
-        duration: 10000,
-      })
-      if (pathnameRef.current !== '/admin/delivery') setDeliveryBadge(n => n + 1)
+        if (pedidosRes.ok) {
+          const { orders = [] } = await pedidosRes.json()
+          for (const order of orders) {
+            if (seenOrderIdsRef.current.has(order.id)) continue
+            seenOrderIdsRef.current.add(order.id)
+            const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
+            const tableNum = order.table?.number
+            toast('🍽️ Novo pedido!', {
+              description: [tableNum && `Mesa ${tableNum}`, code].filter(Boolean).join(' · '),
+              duration: 8000,
+            })
+            if (pathnameRef.current !== '/admin/pedidos') setOrdersBadge(n => n + 1)
+          }
+        }
+      } catch {}
     }
 
-    pb.collection('orders').subscribe('*', async event => {
-      if (event.action !== 'create') return
-      const order = event.record as any
-      if (order.restaurant_id !== restaurantId) return
-      const isDelivery = Boolean(order.delivery_name)
-      if (isDelivery) {
-        notifyDelivery(order)
-      } else {
-        let tableNum: number | null = null
-        let guestName: string | null = null
-        if (order.table_id) {
-          try { const t = await pb.collection('tables').getOne(order.table_id); tableNum = t.number } catch {}
-        }
-        if (order.session_id) {
-          try { const s = await pb.collection('table_sessions').getOne(order.session_id); guestName = s.guest_name } catch {}
-        }
-        const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
-        toast('🍽️ Novo pedido!', {
-          description: [tableNum && `Mesa ${tableNum}`, guestName, code].filter(Boolean).join(' · '),
-          duration: 8000,
-        })
-        if (pathnameRef.current !== '/admin/pedidos') setOrdersBadge(n => n + 1)
-      }
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => { unsubscribe = unsub })
-      .catch(() => {})
+    // Carga inicial — marca todos os pedidos existentes como vistos
+    Promise.all([
+      fetch(`/api/delivery/orders?restaurantId=${restaurantId}`).then(r => r.json()).catch(() => ({ orders: [] })),
+      fetch(`/api/pedidos?restaurantId=${restaurantId}`).then(r => r.json()).catch(() => ({ orders: [] })),
+    ]).then(([delivery, pedidos]) => {
+      for (const o of delivery.orders ?? []) seenDeliveryIdsRef.current.add(o.id)
+      for (const o of pedidos.orders ?? []) seenOrderIdsRef.current.add(o.id)
+    })
 
-    // Polling a cada 20s — cobre casos onde o realtime não entrega o evento
-    // seenDeliveryIdsRef garante que não notifica pedidos já conhecidos
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
-        if (!res.ok) return
-        const data = await res.json()
-        for (const order of (data.orders ?? [])) notifyDelivery(order)
-      } catch {}
-    }, 20_000)
-
-    return () => { unsubscribe?.(); clearInterval(interval) }
+    const interval = setInterval(poll, 15_000)
+    return () => clearInterval(interval)
   }, [restaurantId])
 
   function getBadge(href: string) {

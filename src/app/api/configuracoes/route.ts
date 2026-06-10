@@ -32,11 +32,13 @@ export async function GET() {
 
     let workingHours = hoursResult.items
 
-    // Cria horários padrão se não existirem
-    if (workingHours.length === 0) {
+    // Cria apenas os dias que faltam (evita duplicatas em chamadas simultâneas)
+    const existingDays = new Set(workingHours.map((h: any) => h.day_of_week))
+    const missingDays = [0, 1, 2, 3, 4, 5, 6].filter(d => !existingDays.has(d))
+    if (missingDays.length > 0) {
       try {
         const created = await Promise.all(
-          [0, 1, 2, 3, 4, 5, 6].map(d =>
+          missingDays.map(d =>
             pb.collection('working_hours').create({
               restaurant_id: restaurantId,
               day_of_week: d,
@@ -46,7 +48,7 @@ export async function GET() {
             })
           )
         )
-        workingHours = created.sort((a: any, b: any) => a.day_of_week - b.day_of_week)
+        workingHours = [...workingHours, ...created].sort((a: any, b: any) => a.day_of_week - b.day_of_week)
       } catch {}
     }
 

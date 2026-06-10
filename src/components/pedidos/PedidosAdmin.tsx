@@ -59,25 +59,11 @@ export default function PedidosAdmin({ initialOrders, restaurantId }: { initialO
     loadOrders()
   }, [restaurantId, loadOrders, initialOrders.length])
 
-  // Realtime: re-busca quando qualquer pedido muda
+  // Polling: re-busca pedidos periodicamente
   useEffect(() => {
-    const pb = pbRef.current
-    let unsubscribe: (() => void) | null = null
-
-    pb.collection('orders').subscribe('*', async event => {
-      const order = event.record as any
-      if (order.restaurant_id !== restaurantId) return
-      if (event.action === 'update' && ['closed', 'cancelled'].includes(order.status)) {
-        setOrders(prev => prev.filter(o => o.id !== order.id))
-        return
-      }
-      // Para criação ou atualização de status, re-busca tudo para ter items enriquecidos
-      await loadOrders()
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => { unsubscribe = unsub })
-      .catch(() => {})
-
-    return () => { unsubscribe?.() }
+    if (!restaurantId) return
+    const interval = setInterval(loadOrders, 10_000)
+    return () => clearInterval(interval)
   }, [restaurantId, loadOrders])
 
   async function updateStatus(orderId: string, status: OrderStatus) {

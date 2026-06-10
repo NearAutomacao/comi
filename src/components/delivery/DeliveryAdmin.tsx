@@ -116,55 +116,18 @@ export default function DeliveryAdmin({ restaurantId, slug: initialSlug, initial
       .catch(() => setLoading(false))
   }, [restaurantId])
 
-  // Realtime: escuta novos pedidos de delivery
+  // Polling: atualiza pedidos de delivery periodicamente
   useEffect(() => {
     if (!restaurantId) return
-    const pb = pbRef.current
-    let unsub: (() => void) | null = null
-    let realtimeOk = false
-
-    pb.collection('orders').subscribe('*', async event => {
-      if (event.action !== 'create') return
-      const order = event.record as any
-      if (order.restaurant_id !== restaurantId) return
-      if (!order.delivery_name) return
-
-      let orderItems: any[] = []
-      try {
-        const result = await pb.collection('order_items').getList(1, 50, { filter: `order_id = "${order.id}"` })
-        orderItems = await Promise.all(
-          result.items.map(async (oi: any) => {
-            let menuItem: any = null
-            try { menuItem = await pb.collection('menu_items').getOne(oi.menu_item_id) } catch {}
-            return { ...oi, menu_item: menuItem ? { name: menuItem.name } : null }
-          })
-        )
-      } catch {}
-
-      const newOrder = { ...order, placed_at: order.placed_at || new Date().toISOString(), order_items: orderItems }
-      setOrders(prev => [newOrder, ...prev])
-
-      const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
-      toast(`🛵 Novo pedido delivery! ${code}`, {
-        description: order.delivery_name,
-        duration: 10000,
-      })
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(u => { unsub = u; realtimeOk = true })
-      .catch(() => {})
-
-    // Fallback: polling a cada 20s caso o realtime falhe
     const interval = setInterval(async () => {
-      if (realtimeOk) return
       try {
         const res = await fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
         if (!res.ok) return
         const data = await res.json()
         setOrders(data.orders ?? [])
       } catch {}
-    }, 20000)
-
-    return () => { unsub?.(); clearInterval(interval) }
+    }, 10_000)
+    return () => clearInterval(interval)
   }, [restaurantId])
 
   const ordersByStatus = (status: OrderStatus) => orders.filter(o => o.status === status)

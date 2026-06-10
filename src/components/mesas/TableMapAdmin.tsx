@@ -63,73 +63,27 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
     } catch {}
   }
 
-  // Realtime subscriptions
+  // Polling: re-busca mesas e notifica mudanças de status
   useEffect(() => {
-    const pb = pbRef.current
-    const unsubs: (() => void)[] = []
-
-    pb.collection('tables').subscribe('*', event => {
-      if (event.action === 'update') {
-        const newTable = event.record as unknown as Table
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/mesas')
+        if (!res.ok) return
+        const data = await res.json()
+        if (!data.tables) return
         setTables(prev => {
-          const existing = prev.find(t => t.id === newTable.id)
-          if (existing && existing.status !== newTable.status) {
-            if (newTable.status === 'occupied') {
-              toast.success(`Mesa ${newTable.number} — ocupada`)
-              if (!existing.current_order) fetchCurrentOrderForTable(newTable.id)
-            } else if (newTable.status === 'empty') {
-              toast.info(`Mesa ${newTable.number} — comanda fechada`)
+          for (const newT of data.tables as Table[]) {
+            const old = prev.find(t => t.id === newT.id)
+            if (old && old.status !== newT.status) {
+              if (newT.status === 'occupied') toast.success(`Mesa ${newT.number} — ocupada`)
+              else if (newT.status === 'empty') toast.info(`Mesa ${newT.number} — comanda fechada`)
             }
           }
-          return prev.map(t => t.id === newTable.id ? { ...t, ...newTable } : t)
+          return data.tables
         })
-      }
-      if (event.action === 'create') {
-        setTables(prev => [...prev, { ...(event.record as unknown as Table), current_order: null }])
-      }
-      if (event.action === 'delete') {
-        setTables(prev => prev.filter(t => t.id !== event.record.id))
-      }
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => unsubs.push(unsub))
-      .catch(() => {})
-
-    pb.collection('orders').subscribe('*', async event => {
-      if (event.action === 'create') {
-        const order = event.record
-        if (order.restaurant_id !== restaurantId) return
-        try {
-          const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
-            filter: `order_id = "${order.id}"`,
-          })
-          const items = await Promise.all(
-            orderItems.map(async (item: any) => {
-              let menuItem: any = null
-              try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
-              return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
-            })
-          )
-          setTables(prev => prev.map(t =>
-            t.id === order.table_id
-              ? { ...t, status: 'occupied' as const, current_order: { ...order, order_items: items } as any }
-              : t
-          ))
-        } catch {}
-      }
-      if (event.action === 'update') {
-        const updated = event.record
-        if (['closed', 'cancelled'].includes(updated.status)) return
-        setTables(prev => prev.map(t => {
-          if (t.id !== updated.table_id) return t
-          if (!t.current_order) return t
-          return { ...t, current_order: { ...t.current_order, total: updated.total } }
-        }))
-      }
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => unsubs.push(unsub))
-      .catch(() => {})
-
-    return () => { unsubs.forEach(u => u()) }
+      } catch {}
+    }, 8_000)
+    return () => clearInterval(interval)
   }, [])
 
   function handleMouseDown(e: React.MouseEvent, tableId: string) {

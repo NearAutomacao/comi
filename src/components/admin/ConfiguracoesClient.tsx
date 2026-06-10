@@ -213,7 +213,9 @@ export default function ConfiguracoesClient({ restaurant: initialRestaurant, ini
               <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg p-3 text-green-700 text-sm">
                 <CheckCircle size={16} />
                 <div>
-                  <p className="font-medium">Conta conectada</p>
+                  <p className="font-medium">
+                    {(restaurant as any)?.mp_user_name || 'Conta conectada'}
+                  </p>
                   {restaurant?.mp_user_id && (
                     <p className="text-xs text-green-600">ID: {restaurant.mp_user_id}</p>
                   )}

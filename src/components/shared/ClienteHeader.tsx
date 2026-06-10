@@ -27,54 +27,48 @@ export default function ClienteHeader({ userName }: Props) {
   const displayName = userName || guestName || ''
   const pbRef = useRef(createClient())
 
-  // Escuta status da mesa (ex: liberada pelo garçom)
+  // Polling: monitora status da mesa e transferências (substitui realtime SSE)
   useEffect(() => {
-    if (!tableId) return
+    if (!tableId && !sessionId) return
     const pb = pbRef.current
+    let prevTableStatus = ''
+    let prevSessionTableId = ''
 
-    let unsubscribe: (() => void) | null = null
-    pb.collection('tables').subscribe(tableId, event => {
-      if (event.action !== 'update') return
-      const updated = event.record
-      if (updated.status === 'empty') {
-        // 800ms de delay para não expulsar numa troca de mesa
-        setTimeout(() => {
-          const currentTableId = useCartStore.getState().tableId
-          if (!currentTableId || currentTableId !== tableId) return
-          clearSession()
-          toast.info('Sua mesa foi liberada pelo restaurante.')
-          window.location.href = 'https://comi.awplabs.com.br/'
-        }, 800)
-      }
-    })
-      .then(unsub => { unsubscribe = unsub })
-      .catch(() => {})
+    async function poll() {
+      try {
+        if (tableId) {
+          const table = await pb.collection('tables').getOne(tableId, { fields: 'id,status' })
+          if (prevTableStatus && prevTableStatus !== 'empty' && table.status === 'empty') {
+            setTimeout(() => {
+              const cur = useCartStore.getState().tableId
+              if (!cur || cur !== tableId) return
+              clearSession()
+              toast.info('Sua mesa foi liberada pelo restaurante.')
+              window.location.href = '/'
+            }, 800)
+          }
+          prevTableStatus = table.status
+        }
 
-    return () => { unsubscribe?.() }
-  }, [tableId])
+        if (sessionId) {
+          const session = await pb.collection('table_sessions').getOne(sessionId, { fields: 'id,table_id' })
+          if (prevSessionTableId && session.table_id && session.table_id !== prevSessionTableId) {
+            try {
+              const newTable = await pb.collection('tables').getOne(session.table_id, { fields: 'id,number' })
+              setTable(session.table_id, newTable.number)
+              toast.success(`Você foi transferido para a Mesa ${newTable.number}.`)
+            } catch {}
+          }
+          if (!prevSessionTableId) prevSessionTableId = session.table_id
+          else prevSessionTableId = session.table_id
+        }
+      } catch {}
+    }
 
-  // Escuta transferência de mesa
-  useEffect(() => {
-    if (!sessionId) return
-    const pb = pbRef.current
-
-    let unsubscribe: (() => void) | null = null
-    pb.collection('table_sessions').subscribe(sessionId, async event => {
-      if (event.action !== 'update') return
-      const updated = event.record
-      if (updated.table_id && updated.table_id !== tableId) {
-        try {
-          const newTable = await pb.collection('tables').getOne(updated.table_id)
-          setTable(updated.table_id, newTable.number)
-          toast.success(`Você foi transferido para a Mesa ${newTable.number}.`)
-        } catch {}
-      }
-    })
-      .then(unsub => { unsubscribe = unsub })
-      .catch(() => {})
-
-    return () => { unsubscribe?.() }
-  }, [sessionId])
+    poll()
+    const interval = setInterval(poll, 6_000)
+    return () => clearInterval(interval)
+  }, [tableId, sessionId])
 
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
@@ -195,6 +189,22 @@ export default function ClienteHeader({ userName }: Props) {
           </div>
           Carrinho
         </Link>
+        {isGuest ? (
+          <button
+            onClick={() => { clearSession(); document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'; window.location.href = '/' }}
+            className="flex-1 flex flex-col items-center py-2 text-xs font-medium text-gray-500"
+          >
+            <LogOut size={20} />
+            Sair
+          </button>
+        ) : (
+          <form action={signOut} className="flex-1">
+            <button type="submit" className="w-full flex flex-col items-center py-2 text-xs font-medium text-gray-500">
+              <LogOut size={20} />
+              Sair
+            </button>
+          </form>
+        )}
       </nav>
 
       {tableNumber && (

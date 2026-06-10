@@ -33,6 +33,19 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${appUrl}/admin/configuracoes?mp=error`)
     }
 
+    // Busca nome/email do usuário MP para exibir na tela
+    let mpUserName = ''
+    try {
+      const meRes = await fetch(`https://api.mercadopago.com/users/${tokenData.user_id}`, {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      })
+      if (meRes.ok) {
+        const me = await meRes.json()
+        const parts = [me.first_name, me.last_name].filter(Boolean)
+        mpUserName = parts.length > 0 ? parts.join(' ') : (me.email ?? '')
+      }
+    } catch {}
+
     // Find restaurant by owner_id and update tokens
     const pb = createAdminClient()
     const { items } = await pb.collection('restaurants').getList(1, 1, {
@@ -45,6 +58,7 @@ export async function GET(request: NextRequest) {
         mp_refresh_token: tokenData.refresh_token ?? null,
         mp_public_key: tokenData.public_key ?? null,
         mp_user_id: String(tokenData.user_id ?? ''),
+        mp_user_name: mpUserName,
       })
     }
 

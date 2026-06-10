@@ -48,19 +48,22 @@ export default function OrderTracking({ slug, guestName, orderId, orderCode, ini
   const stepIndex = STEPS.findIndex(s => s.key === status)
   const isDone = status === 'closed' || status === 'cancelled'
 
-  // Realtime: atualiza status conforme o admin avança o pedido
+  // Polling: atualiza status conforme o admin avança o pedido
   useEffect(() => {
+    if (isDone) return
     const pb = pbRef.current
-    let unsub: (() => void) | null = null
 
-    pb.collection('orders').subscribe(orderId, event => {
-      setStatus((event.record as any).status as OrderStatus)
-    })
-      .then(u => { unsub = u })
-      .catch(() => {})
+    async function poll() {
+      try {
+        const order = await pb.collection('orders').getOne(orderId, { fields: 'id,status' })
+        setStatus(order.status as OrderStatus)
+      } catch {}
+    }
 
-    return () => { unsub?.() }
-  }, [orderId])
+    poll()
+    const interval = setInterval(poll, 4_000)
+    return () => clearInterval(interval)
+  }, [orderId, isDone])
 
   // Quando entregue/cancelado: espera 3s e faz logout
   useEffect(() => {

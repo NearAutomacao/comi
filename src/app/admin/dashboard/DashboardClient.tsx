@@ -62,23 +62,8 @@ export default function DashboardClient({
     refetchOrders()
     refetchTables()
 
-    pb.collection('orders').subscribe('*', event => {
-      if (['create', 'update'].includes(event.action)) {
-        if ((event.record as any).restaurant_id === restaurantId) refetchOrders()
-      }
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(u => unsubs.push(u))
-      .catch(() => {})
-
-    pb.collection('tables').subscribe('*', event => {
-      if (event.action === 'update') {
-        if ((event.record as any).restaurant_id === restaurantId) refetchTables()
-      }
-    }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(u => unsubs.push(u))
-      .catch(() => {})
-
-    return () => { unsubs.forEach(u => u()) }
+    const interval = setInterval(() => { refetchOrders(); refetchTables() }, 15_000)
+    return () => clearInterval(interval)
   }, [restaurantId])
 
   const stats = [
