@@ -145,20 +145,22 @@ export default function ClienteHeader({ userName }: Props) {
           {isGuest ? (
             <Button
               variant="ghost"
-              size="icon"
-              title="Sair da mesa"
+              size="sm"
+              className="text-gray-500 hover:text-red-500 gap-1.5"
               onClick={() => {
                 clearSession()
                 document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'
-                window.location.href = 'https://comi.awplabs.com.br/'
+                window.location.href = '/'
               }}
             >
-              <LogOut size={18} />
+              <LogOut size={15} />
+              <span className="text-xs">Sair</span>
             </Button>
           ) : (
             <form action={signOut}>
-              <Button variant="ghost" size="icon" type="submit" title="Sair">
-                <LogOut size={18} />
+              <Button variant="ghost" size="sm" type="submit" className="text-gray-500 hover:text-red-500 gap-1.5">
+                <LogOut size={15} />
+                <span className="text-xs">Sair</span>
               </Button>
             </form>
           )}
