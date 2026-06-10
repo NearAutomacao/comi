@@ -21,9 +21,8 @@ export async function GET(req: Request) {
 
     const pb = createAdminClient()
     const { items } = await pb.collection('orders').getList(1, 200, {
-      filter: `restaurant_id = "${restaurantId}" && delivery_name != null && delivery_name != "" && status != "closed" && status != "cancelled"`,
+      filter: `restaurant_id = "${restaurantId}" && delivery_name != "" && status != "closed" && status != "cancelled"`,
       sort: '-code',
-      fields: '*,created',
     })
 
     if (items.length === 0) return NextResponse.json({ orders: [] })
