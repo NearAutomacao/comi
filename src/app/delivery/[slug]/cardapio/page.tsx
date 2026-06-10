@@ -56,6 +56,8 @@ export default async function DeliveryCardapioPage({
     category: categories.find((c: any) => c.id === item.category_id) ?? null,
   }))
 
+  const pbUrl = process.env.PB_URL ?? 'http://127.0.0.1:8090'
+
   const grouped = categories
     .map((cat: any) => ({
       category: cat,
@@ -63,7 +65,8 @@ export default async function DeliveryCardapioPage({
         .filter((i: any) => i.category_id === cat.id)
         .map((i: any) => ({
           ...i,
-          photo_url: i.photo_url || (i.photo ? pb.files.getURL(i, i.photo) : null),
+          photo_url: i.photo_url ||
+            (i.photo ? `${pbUrl}/api/files/${i.collectionId}/${i.id}/${i.photo}` : null),
         })),
     }))
     .filter(g => g.items.length > 0)
