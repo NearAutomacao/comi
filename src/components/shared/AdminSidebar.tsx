@@ -107,7 +107,6 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
 
     const pb = pbRef.current
     let unsubscribe: (() => void) | null = null
-    let realtimeOk = false
 
     const notifyDelivery = (order: any) => {
       if (seenDeliveryIdsRef.current.has(order.id)) return
@@ -124,7 +123,6 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
       if (event.action !== 'create') return
       const order = event.record as any
       if (order.restaurant_id !== restaurantId) return
-      realtimeOk = true
       const isDelivery = Boolean(order.delivery_name)
       if (isDelivery) {
         notifyDelivery(order)
@@ -145,19 +143,19 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
         if (pathnameRef.current !== '/admin/pedidos') setOrdersBadge(n => n + 1)
       }
     }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => { unsubscribe = unsub; realtimeOk = true })
+      .then(unsub => { unsubscribe = unsub })
       .catch(() => {})
 
-    // Fallback: polling a cada 30s caso realtime não esteja funcionando
+    // Polling a cada 20s — cobre casos onde o realtime não entrega o evento
+    // seenDeliveryIdsRef garante que não notifica pedidos já conhecidos
     const interval = setInterval(async () => {
-      if (realtimeOk) return
       try {
         const res = await fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
         if (!res.ok) return
         const data = await res.json()
         for (const order of (data.orders ?? [])) notifyDelivery(order)
       } catch {}
-    }, 30_000)
+    }, 20_000)
 
     return () => { unsubscribe?.(); clearInterval(interval) }
   }, [restaurantId])
