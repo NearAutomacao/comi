@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifyDeliverySessionToken } from '@/lib/delivery-session'
-import { createAdminClient } from '@/lib/pb/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import OrderTracking from '@/components/delivery/OrderTracking'
 import { Button } from '@/components/ui/button'
 
@@ -53,13 +53,20 @@ export default async function AcompanharPage({ params }: { params: Promise<{ slu
     const { items } = await pb.collection('order_items').getList(1, 100, {
       filter: `order_id = "${session.orderId}"`,
     })
-    orderItems = await Promise.all(
-      items.map(async (oi: any) => {
-        let menuItem: any = null
-        try { menuItem = await pb.collection('menu_items').getOne(oi.menu_item_id) } catch {}
-        return { quantity: oi.quantity, unit_price: oi.unit_price, menu_item: menuItem ? { name: menuItem.name } : null }
+    const menuItemIds = [...new Set(items.map((oi: any) => oi.menu_item_id).filter(Boolean))] as string[]
+    let menuItemMap: Record<string, string> = {}
+    if (menuItemIds.length > 0) {
+      const { items: menuItems } = await pb.collection('menu_items').getList(1, 200, {
+        filter: inFilter('id', menuItemIds),
+        fields: 'id,name',
       })
-    )
+      menuItemMap = Object.fromEntries(menuItems.map((m: any) => [m.id, m.name]))
+    }
+    orderItems = items.map((oi: any) => ({
+      quantity: oi.quantity,
+      unit_price: oi.unit_price,
+      menu_item: menuItemMap[oi.menu_item_id] ? { name: menuItemMap[oi.menu_item_id] } : null,
+    }))
   } catch {}
 
   return (

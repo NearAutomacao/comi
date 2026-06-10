@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import Image from 'next/image'
-import { CheckCircle, ChefHat, Clock, PackageCheck, Truck, XCircle } from 'lucide-react'
+import { CheckCircle, ChefHat, Clock, PackageCheck, Truck, XCircle, LogOut } from 'lucide-react'
 
 const STEPS = [
   { key: 'open',      label: 'Pedido recebido',   icon: Clock },
@@ -99,7 +99,19 @@ export default function OrderTracking({ slug, guestName, orderId, orderCode, ini
             Olá, <strong>{guestName.split(' ')[0]}</strong>!
           </p>
           {isDone && (
-            <p className="text-xs text-gray-400 mt-2 animate-pulse">Redirecionando em instantes...</p>
+            <>
+              <p className="text-xs text-gray-400 mt-2 animate-pulse">Redirecionando em instantes...</p>
+              <button
+                onClick={async () => {
+                  await fetch('/api/delivery/logout', { method: 'POST' })
+                  window.location.href = `/delivery/${slug}`
+                }}
+                className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
+              >
+                <LogOut size={14} />
+                Fazer novo pedido
+              </button>
+            </>
           )}
         </div>
 

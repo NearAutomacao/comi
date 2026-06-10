@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -72,7 +71,6 @@ function formatTime(t: string) {
 }
 
 export default function DeliveryLandingForm({ slug, restaurantName, whatsappContact, workingHours, closedDates }: Props) {
-  const router = useRouter()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
@@ -113,7 +111,7 @@ export default function DeliveryLandingForm({ slug, restaurantName, whatsappCont
         setLoading(false)
         return
       }
-      router.push(`/delivery/${slug}/cardapio`)
+      window.location.href = `/delivery/${slug}/cardapio`
     } catch {
       setError('Erro de conexão. Tente novamente.')
       setLoading(false)

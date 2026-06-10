@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { ShoppingBag, Plus, Minus, X, Loader2, ChevronRight, Copy, Check, AlertCircle, QrCode, RefreshCw } from 'lucide-react'
+import { ShoppingBag, Plus, Minus, X, Loader2, ChevronRight, Copy, Check, AlertCircle, QrCode, RefreshCw, LogOut } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
 interface MenuItem {
@@ -423,6 +423,17 @@ export default function DeliveryMenu({ slug, restaurantName, guestName, grouped,
               {itemCount}
             </button>
           )}
+          <button
+            onClick={async () => {
+              await fetch('/api/delivery/logout', { method: 'POST' })
+              window.location.href = `/delivery/${slug}`
+            }}
+            className="ml-1 flex items-center gap-1 text-xs text-gray-400 hover:text-red-500 transition-colors px-1 py-1"
+            title="Sair"
+          >
+            <LogOut size={15} />
+            <span className="hidden sm:inline">Sair</span>
+          </button>
         </div>
 
         {/* Category tabs */}
