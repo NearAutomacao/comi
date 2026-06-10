@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,7 @@ const emptyForm = (): ItemForm => ({
 export default function CardapioAdmin({ restaurantId, initialCategories, initialItems }: Props) {
   const [categories, setCategories] = useState<MenuCategory[]>(initialCategories)
   const [items, setItems] = useState(initialItems)
+  const [loading, setLoading] = useState(initialItems.length === 0)
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [form, setForm] = useState<ItemForm>(emptyForm())
   const [pendingPhotoFile, setPendingPhotoFile] = useState<File | null>(null)
@@ -51,6 +52,21 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
   const [activeCategory, setActiveCategory] = useState(initialCategories[0]?.id ?? '')
   const [catDialog, setCatDialog] = useState<{ mode: 'new' | 'rename'; catId?: string; value: string } | null>(null)
   const pbRef = useRef(createClient())
+
+  useEffect(() => {
+    if (initialItems.length > 0) return
+    fetch('/api/cardapio')
+      .then(r => r.json())
+      .then(data => {
+        if (data.categories) setCategories(data.categories)
+        if (data.items) {
+          setItems(data.items)
+          if (!activeCategory && data.categories?.length) setActiveCategory(data.categories[0].id)
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   async function handleSaveCategory() {
     const name = catDialog?.value.trim()
@@ -254,6 +270,15 @@ export default function CardapioAdmin({ restaurantId, initialCategories, initial
   async function toggleAvailable(item: MenuItem) {
     await pbRef.current.collection('menu_items').update(item.id, { available: !item.available })
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, available: !i.available } : i))
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-3" />
+        <span className="text-sm">Carregando cardápio...</span>
+      </div>
+    )
   }
 
   const filteredItems = items.filter(i => i.category_id === activeCategory)

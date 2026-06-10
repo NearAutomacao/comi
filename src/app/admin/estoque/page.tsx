@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifyAdminSessionToken } from '@/lib/auth-session'
-import { createAdminClient } from '@/lib/pb/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import { formatCurrency } from '@/lib/utils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Package } from 'lucide-react'
@@ -32,48 +32,54 @@ export default async function EstoquePage({
 
   if (restaurantId) {
     try {
-      // Fetch orders in date range (PocketBase uses ISO timestamps for filtering)
-      const fromTs = `${fromDate}T03:00:00.000Z` // UTC equivalent of Brazil midnight (UTC-3)
-      const toTs = `${toDate}T02:59:59.000Z`     // UTC equivalent of Brazil end-of-day
-
-      // PocketBase date filter: use string comparison on created field
       const { items: orders } = await pb.collection('orders').getList(1, 2000, {
         filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && created >= "${fromDate} 00:00:00" && created <= "${toDate} 23:59:59"`,
       })
 
-      for (const order of orders) {
-        const { items: orderItems } = await pb.collection('order_items').getList(1, 100, {
-          filter: `order_id = "${order.id}"`,
+      if (orders.length > 0) {
+        const orderIds = orders.map((o: any) => o.id)
+
+        const { items: allOrderItems } = await pb.collection('order_items').getList(1, 10000, {
+          filter: inFilter('order_id', orderIds),
         })
 
-        for (const item of orderItems as any[]) {
-          let menuItem: any = null
-          let costItems: any[] = []
+        const menuItemIds = [...new Set(allOrderItems.map((i: any) => i.menu_item_id))] as string[]
 
-          try {
-            menuItem = await pb.collection('menu_items').getOne(item.menu_item_id)
-          } catch { continue }
+        if (menuItemIds.length > 0) {
+          const [menuItemsResult, costItemsResult] = await Promise.all([
+            pb.collection('menu_items').getList(1, 1000, {
+              filter: inFilter('id', menuItemIds),
+              fields: 'id,name,price',
+            }),
+            pb.collection('cost_items').getList(1, 5000, {
+              filter: inFilter('menu_item_id', menuItemIds),
+            }),
+          ])
 
-          try {
-            const { items: ci } = await pb.collection('cost_items').getList(1, 50, {
-              filter: `menu_item_id = "${item.menu_item_id}"`,
-            })
-            costItems = ci
-          } catch {}
+          const menuItemMap = new Map((menuItemsResult.items as any[]).map(m => [m.id, m]))
 
-          const itemCost = costItems.reduce((s: number, c: any) => s + (c.unit_cost ?? 0), 0)
-          const existing = costMap.get(item.menu_item_id)
-          if (existing) {
-            existing.qty += item.quantity
-            existing.revenue += menuItem.price * item.quantity
-            existing.cost += itemCost * item.quantity
-          } else {
-            costMap.set(item.menu_item_id, {
-              name: menuItem.name,
-              qty: item.quantity,
-              revenue: menuItem.price * item.quantity,
-              cost: itemCost * item.quantity,
-            })
+          const costByItem = new Map<string, number>()
+          for (const ci of costItemsResult.items as any[]) {
+            costByItem.set(ci.menu_item_id, (costByItem.get(ci.menu_item_id) ?? 0) + (ci.unit_cost ?? 0))
+          }
+
+          for (const item of allOrderItems as any[]) {
+            const menuItem = menuItemMap.get(item.menu_item_id)
+            if (!menuItem) continue
+            const itemCost = costByItem.get(item.menu_item_id) ?? 0
+            const existing = costMap.get(item.menu_item_id)
+            if (existing) {
+              existing.qty += item.quantity
+              existing.revenue += menuItem.price * item.quantity
+              existing.cost += itemCost * item.quantity
+            } else {
+              costMap.set(item.menu_item_id, {
+                name: menuItem.name,
+                qty: item.quantity,
+                revenue: menuItem.price * item.quantity,
+                cost: itemCost * item.quantity,
+              })
+            }
           }
         }
       }

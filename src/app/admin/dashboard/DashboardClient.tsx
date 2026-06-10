@@ -59,6 +59,9 @@ export default function DashboardClient({
     const pb = pbRef.current
     const unsubs: (() => void)[] = []
 
+    refetchOrders()
+    refetchTables()
+
     pb.collection('orders').subscribe('*', event => {
       if (['create', 'update'].includes(event.action)) {
         if ((event.record as any).restaurant_id === restaurantId) refetchOrders()

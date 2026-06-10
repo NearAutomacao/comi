@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/pb/client'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,12 +32,31 @@ const statusMap: Record<ReservationStatus, { label: string; class: string }> = {
 
 export default function ReservasAdmin({ initialReservations }: { initialReservations: Reservation[] }) {
   const [reservations, setReservations] = useState(initialReservations)
+  const [loading, setLoading] = useState(initialReservations.length === 0)
   const pbRef = useRef(createClient())
+
+  useEffect(() => {
+    if (initialReservations.length > 0) return
+    fetch('/api/reservas')
+      .then(r => r.json())
+      .then(data => { if (data.reservations) setReservations(data.reservations) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   async function updateStatus(id: string, status: ReservationStatus) {
     await pbRef.current.collection('reservations').update(id, { status })
     setReservations(prev => prev.map(r => r.id === id ? { ...r, status } : r))
     toast.success('Status atualizado')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-3" />
+        <span className="text-sm">Carregando reservas...</span>
+      </div>
+    )
   }
 
   if (reservations.length === 0) {

@@ -19,6 +19,7 @@ interface Props {
 
 export default function TableMapAdmin({ restaurantId, initialTables, localIP }: Props) {
   const [tables, setTables] = useState<Table[]>(initialTables)
+  const [loading, setLoading] = useState(initialTables.length === 0)
   const [selected, setSelected] = useState<Table | null>(null)
   const [qrTable, setQrTable] = useState<Table | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
@@ -26,6 +27,15 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
   const mapRef = useRef<HTMLDivElement>(null)
   const dragMovedRef = useRef(false)
   const pbRef = useRef(createClient())
+
+  useEffect(() => {
+    if (initialTables.length > 0) return
+    fetch('/api/mesas')
+      .then(r => r.json())
+      .then(data => { if (data.tables) setTables(data.tables) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
   // Busca o pedido aberto mais recente de uma mesa (para caso de transferência)
   async function fetchCurrentOrderForTable(tableId: string) {
@@ -180,6 +190,15 @@ export default function TableMapAdmin({ restaurantId, initialTables, localIP }: 
   const appUrl = localIP && localIP !== '127.0.0.1'
     ? `http://${localIP}:3100`
     : (typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL ?? ''))
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-3" />
+        <span className="text-sm">Carregando mesas...</span>
+      </div>
+    )
+  }
 
   return (
     <div>
