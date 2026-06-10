@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, MessageCircle, ShoppingBag } from 'lucide-react'
+import { Loader2, MessageCircle } from 'lucide-react'
 
 function maskPhone(v: string) {
   return v.replace(/\D/g, '').replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d{1,4})$/, '$1-$2').slice(0, 15)
@@ -124,11 +124,10 @@ export default function DeliveryLandingForm({ slug, restaurantName, whatsappCont
     <main className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex flex-col items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="w-20 h-20 rounded-2xl bg-orange-500 flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <ShoppingBag size={36} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-black text-gray-800" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            {restaurantName || 'Delivery'}
+          <Image src="/icomi-nobg.png" alt="comi" width={80} height={80} className="mx-auto mb-3 drop-shadow-md" />
+          <p className="text-xs font-semibold text-orange-500 uppercase tracking-widest mb-1">Delivery</p>
+          <h1 className="text-2xl font-black text-gray-900" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            {restaurantName || 'Cardápio'}
           </h1>
 
           {/* Badge aberto/fechado */}
@@ -206,9 +205,6 @@ export default function DeliveryLandingForm({ slug, restaurantName, whatsappCont
           </a>
         )}
 
-        <div className="mt-6 flex justify-center">
-          <Image src="/icomi-nobg.png" alt="comi" width={32} height={32} className="opacity-30" />
-        </div>
       </div>
     </main>
   )

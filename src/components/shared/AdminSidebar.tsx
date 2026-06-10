@@ -55,6 +55,13 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
   const [sheetOpen, setSheetOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
+  // Ref para evitar closure desatualizado dentro dos callbacks de subscribe
+  const pathnameRef = useRef(pathname)
+  useEffect(() => { pathnameRef.current = pathname }, [pathname])
+
+  // IDs de pedidos delivery já notificados (evita duplicatas entre realtime e polling)
+  const seenDeliveryIdsRef = useRef<Set<string>>(new Set())
+
   const initials = managerName.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
 
   useEffect(() => {
@@ -76,7 +83,7 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
       if (event.action !== 'update') return
       const updated = event.record
       if (updated.restaurant_id !== restaurantId) return
-      if (updated.status === 'occupied' && pathname !== '/admin/mesas') {
+      if (updated.status === 'occupied' && pathnameRef.current !== '/admin/mesas') {
         toast(`Mesa ${updated.number} ocupada`, {
           description: updated.guest_name ? `Cliente: ${updated.guest_name}` : undefined,
           icon: '🪑',
@@ -91,39 +98,68 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
 
   useEffect(() => {
     if (!restaurantId) return
+
+    // Marca pedidos delivery já existentes como vistos (não notifica sobre eles)
+    fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
+      .then(r => r.json())
+      .then(data => (data.orders ?? []).forEach((o: any) => seenDeliveryIdsRef.current.add(o.id)))
+      .catch(() => {})
+
     const pb = pbRef.current
     let unsubscribe: (() => void) | null = null
+    let realtimeOk = false
+
+    const notifyDelivery = (order: any) => {
+      if (seenDeliveryIdsRef.current.has(order.id)) return
+      seenDeliveryIdsRef.current.add(order.id)
+      const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
+      toast('🛵 Novo pedido delivery!', {
+        description: [order.delivery_name, code].filter(Boolean).join(' · '),
+        duration: 10000,
+      })
+      if (pathnameRef.current !== '/admin/delivery') setDeliveryBadge(n => n + 1)
+    }
+
     pb.collection('orders').subscribe('*', async event => {
       if (event.action !== 'create') return
-      const order = event.record
+      const order = event.record as any
       if (order.restaurant_id !== restaurantId) return
-      let tableNum: number | null = null
-      let guestName: string | null = null
-      if (order.table_id) {
-        try { const t = await pb.collection('tables').getOne(order.table_id); tableNum = t.number } catch {}
-      }
-      if (order.session_id) {
-        try { const s = await pb.collection('table_sessions').getOne(order.session_id); guestName = s.guest_name } catch {}
-      }
-      const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
+      realtimeOk = true
       const isDelivery = Boolean(order.delivery_name)
       if (isDelivery) {
-        toast('🛵 Novo pedido delivery!', {
-          description: [order.delivery_name, code].filter(Boolean).join(' · '),
-          duration: 10000,
-        })
-        if (pathname !== '/admin/delivery') setDeliveryBadge(n => n + 1)
+        notifyDelivery(order)
       } else {
+        let tableNum: number | null = null
+        let guestName: string | null = null
+        if (order.table_id) {
+          try { const t = await pb.collection('tables').getOne(order.table_id); tableNum = t.number } catch {}
+        }
+        if (order.session_id) {
+          try { const s = await pb.collection('table_sessions').getOne(order.session_id); guestName = s.guest_name } catch {}
+        }
+        const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
         toast('🍽️ Novo pedido!', {
           description: [tableNum && `Mesa ${tableNum}`, guestName, code].filter(Boolean).join(' · '),
           duration: 8000,
         })
-        if (pathname !== '/admin/pedidos') setOrdersBadge(n => n + 1)
+        if (pathnameRef.current !== '/admin/pedidos') setOrdersBadge(n => n + 1)
       }
     }, { filter: `restaurant_id = "${restaurantId}"` })
-      .then(unsub => { unsubscribe = unsub })
+      .then(unsub => { unsubscribe = unsub; realtimeOk = true })
       .catch(() => {})
-    return () => { unsubscribe?.() }
+
+    // Fallback: polling a cada 30s caso realtime não esteja funcionando
+    const interval = setInterval(async () => {
+      if (realtimeOk) return
+      try {
+        const res = await fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        for (const order of (data.orders ?? [])) notifyDelivery(order)
+      } catch {}
+    }, 30_000)
+
+    return () => { unsubscribe?.(); clearInterval(interval) }
   }, [restaurantId])
 
   function getBadge(href: string) {
@@ -216,7 +252,7 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
                   <Icon className="h-4 w-4 shrink-0" />
                   {!collapsed && <span className="flex-1 truncate">{label}</span>}
                   {!collapsed && badge > 0 && (
-                    <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
+                    <span className="min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 animate-pulse">
                       {badge}
                     </span>
                   )}

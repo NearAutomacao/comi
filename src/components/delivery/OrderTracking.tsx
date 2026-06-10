@@ -76,6 +76,11 @@ export default function OrderTracking({ slug, guestName, orderId, orderCode, ini
     <main className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex flex-col items-center px-4 py-12">
       <div className="w-full max-w-sm">
 
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <Image src="/icomi-nobg.png" alt="comi" width={56} height={56} className="drop-shadow-sm" />
+        </div>
+
         {/* Status principal */}
         <div className="text-center mb-8">
           <div className={`w-24 h-24 rounded-full ${meta.bg} ring-4 ${meta.ring} flex items-center justify-center mx-auto mb-4 transition-all duration-500`}>
@@ -140,9 +145,6 @@ export default function OrderTracking({ slug, guestName, orderId, orderCode, ini
           </div>
         </div>
 
-        <div className="flex justify-center">
-          <Image src="/icomi-nobg.png" alt="comi" width={32} height={32} className="opacity-30" />
-        </div>
       </div>
     </main>
   )
