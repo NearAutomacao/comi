@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/pb/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import { verifyAdminSessionToken } from '@/lib/auth-session'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
@@ -26,24 +26,39 @@ export async function GET(req: Request) {
       fields: '*,created',
     })
 
-    const orders = await Promise.all(
-      items.map(async (order: any) => {
-        let orderItems: any[] = []
-        try {
-          const result = await pb.collection('order_items').getList(1, 50, {
-            filter: `order_id = "${order.id}"`,
-          })
-          orderItems = await Promise.all(
-            result.items.map(async (oi: any) => {
-              let menuItem: any = null
-              try { menuItem = await pb.collection('menu_items').getOne(oi.menu_item_id) } catch {}
-              return { ...oi, menu_item: menuItem ? { name: menuItem.name } : null }
-            })
-          )
-        } catch {}
-        return { ...order, order_items: orderItems }
+    if (items.length === 0) return NextResponse.json({ orders: [] })
+
+    // Batch: todos os order_items em 1 query
+    const orderIds = items.map((o: any) => o.id)
+    const { items: allOrderItems } = await pb.collection('order_items').getList(1, 1000, {
+      filter: inFilter('order_id', orderIds),
+    })
+
+    // Batch: todos os menu_items necessários em 1 query
+    const menuItemIds = [...new Set(allOrderItems.map((oi: any) => oi.menu_item_id).filter(Boolean))] as string[]
+    let menuItemMap: Record<string, any> = {}
+    if (menuItemIds.length > 0) {
+      const { items: menuItems } = await pb.collection('menu_items').getList(1, 1000, {
+        filter: inFilter('id', menuItemIds),
+        fields: 'id,name',
       })
-    )
+      menuItemMap = Object.fromEntries(menuItems.map((m: any) => [m.id, m]))
+    }
+
+    // Monta mapa order_id → order_items em memória
+    const orderItemsByOrder = new Map<string, any[]>()
+    for (const oi of allOrderItems) {
+      if (!orderItemsByOrder.has(oi.order_id)) orderItemsByOrder.set(oi.order_id, [])
+      orderItemsByOrder.get(oi.order_id)!.push({
+        ...oi,
+        menu_item: menuItemMap[oi.menu_item_id] ? { name: menuItemMap[oi.menu_item_id].name } : null,
+      })
+    }
+
+    const orders = items.map((order: any) => ({
+      ...order,
+      order_items: orderItemsByOrder.get(order.id) ?? [],
+    }))
 
     return NextResponse.json({ orders })
   } catch (err: any) {

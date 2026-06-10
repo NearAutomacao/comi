@@ -15,28 +15,37 @@ export async function GET(req: Request) {
       sort: 'created',
     })
 
-    // Busca itens de cada pedido
-    const ordersWithItems = await Promise.all(
-      orders.map(async (order: any) => {
-        let orderItems: any[] = []
-        try {
-          const result = await pb.collection('order_items').getList(1, 100, {
-            filter: `order_id = "${order.id}"`,
-          })
-          orderItems = result.items
-        } catch {}
-        const enrichedItems = await Promise.all(
-          orderItems.map(async (item: any) => {
-            let menuItem: any = null
-            try {
-              menuItem = await pb.collection('menu_items').getOne(item.menu_item_id)
-            } catch {}
-            return { ...item, menu_item: menuItem ? { name: menuItem.name } : null }
-          })
-        )
-        return { ...order, order_items: enrichedItems }
+    // Batch: todos os order_items em 1 query
+    const allOrderIds = orders.map((o: any) => o.id)
+    const { items: allOrderItems } = await pb.collection('order_items').getList(1, 500, {
+      filter: inFilter('order_id', allOrderIds),
+    })
+
+    // Batch: todos os menu_items necessários em 1 query
+    const menuItemIds = [...new Set(allOrderItems.map((oi: any) => oi.menu_item_id).filter(Boolean))] as string[]
+    let menuItemMap: Record<string, any> = {}
+    if (menuItemIds.length > 0) {
+      const { items: menuItems } = await pb.collection('menu_items').getList(1, 500, {
+        filter: inFilter('id', menuItemIds),
+        fields: 'id,name',
       })
-    )
+      menuItemMap = Object.fromEntries(menuItems.map((m: any) => [m.id, m]))
+    }
+
+    // Monta mapa order_id → order_items em memória
+    const orderItemsByOrder = new Map<string, any[]>()
+    for (const oi of allOrderItems) {
+      if (!orderItemsByOrder.has(oi.order_id)) orderItemsByOrder.set(oi.order_id, [])
+      orderItemsByOrder.get(oi.order_id)!.push({
+        ...oi,
+        menu_item: menuItemMap[oi.menu_item_id] ? { name: menuItemMap[oi.menu_item_id].name } : null,
+      })
+    }
+
+    const ordersWithItems = orders.map((order: any) => ({
+      ...order,
+      order_items: orderItemsByOrder.get(order.id) ?? [],
+    }))
 
     // Busca nomes das sessões
     const sessionIds = [...new Set(orders.map((o: any) => o.session_id).filter(Boolean))] as string[]

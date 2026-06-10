@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/pb/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import { verifyDeliverySessionToken, createDeliverySessionToken } from '@/lib/delivery-session'
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
@@ -44,14 +44,15 @@ async function handlePost(req: Request) {
     )
   }
 
-  // Calcula total com os preços do servidor (nunca confia no cliente)
+  // Calcula total com os preços do servidor (batch, nunca confia no cliente)
+  const menuItemIds = [...new Set(items.map(i => i.menuItemId))]
+  const { items: menuItemsRaw } = await pb.collection('menu_items').getList(1, 200, {
+    filter: inFilter('id', menuItemIds),
+    fields: 'id,price',
+  })
+  const priceMap = Object.fromEntries(menuItemsRaw.map((m: any) => [m.id, m.price ?? 0]))
   let total = 0
-  for (const item of items) {
-    try {
-      const mi = await pb.collection('menu_items').getOne(item.menuItemId)
-      total += (mi.price ?? 0) * item.quantity
-    } catch {}
-  }
+  for (const item of items) total += (priceMap[item.menuItemId] ?? 0) * item.quantity
 
   total = Math.round(total * 100) / 100
 

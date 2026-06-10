@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/pb/client'
 import { formatCurrency } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -32,87 +32,53 @@ type RichOrder = Order & {
   session?: { guest_name: string } | null
 }
 
-async function fetchRichOrder(pb: ReturnType<typeof createClient>, orderId: string): Promise<RichOrder | null> {
-  try {
-    const order = await pb.collection('orders').getOne(orderId) as any
-    const [tableResult, sessionResult, orderItemsResult] = await Promise.allSettled([
-      order.table_id ? pb.collection('tables').getOne(order.table_id) : Promise.resolve(null),
-      order.session_id ? pb.collection('table_sessions').getOne(order.session_id) : Promise.resolve(null),
-      pb.collection('order_items').getList(1, 100, { filter: `order_id = "${orderId}"` }),
-    ])
-
-    const table = tableResult.status === 'fulfilled' ? tableResult.value : null
-    const session = sessionResult.status === 'fulfilled' ? sessionResult.value : null
-    const orderItemsList = orderItemsResult.status === 'fulfilled' ? (orderItemsResult.value as any).items : []
-
-    const enrichedItems = await Promise.all(
-      orderItemsList.map(async (item: any) => {
-        let menuItem: any = null
-        try { menuItem = await pb.collection('menu_items').getOne(item.menu_item_id) } catch {}
-        return { ...item, menu_item: menuItem ? { name: menuItem.name, price: menuItem.price } : null }
-      })
-    )
-
-    return {
-      ...order,
-      table: table ? { number: (table as any).number } : undefined,
-      session: session ? { guest_name: (session as any).guest_name } : null,
-      order_items: enrichedItems,
-    } as RichOrder
-  } catch {
-    return null
-  }
-}
-
 export default function PedidosAdmin({ initialOrders, restaurantId }: { initialOrders: Order[]; restaurantId: string }) {
   const [orders, setOrders] = useState<RichOrder[]>(initialOrders as RichOrder[])
   const [loading, setLoading] = useState(initialOrders.length === 0)
   const [payingTableId, setPayingTableId] = useState<string | null>(null)
   const pbRef = useRef(createClient())
 
-  // Carga inicial se o servidor não retornou dados
-  useEffect(() => {
-    if (!restaurantId || initialOrders.length > 0) return
-    const pb = pbRef.current
-    const loadOrders = async () => {
-      try {
-        const { items } = await pb.collection('orders').getList(1, 200, {
-          filter: `restaurant_id = "${restaurantId}" && delivery_name = null && (status = "open" || status = "preparing" || status = "served")`,
-          sort: '-code',
-        })
-        const rich = await Promise.all(items.map(o => fetchRichOrder(pb, o.id)))
-        setOrders(rich.filter(Boolean) as RichOrder[])
-      } catch {}
-      setLoading(false)
-    }
-    loadOrders()
+  const loadOrders = useCallback(async () => {
+    if (!restaurantId) return
+    try {
+      const res = await fetch(`/api/pedidos?restaurantId=${restaurantId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setOrders(data.orders ?? [])
+      }
+    } catch {}
+    setLoading(false)
   }, [restaurantId])
 
+  // Carga inicial
+  useEffect(() => {
+    if (!restaurantId || initialOrders.length > 0) {
+      setLoading(false)
+      return
+    }
+    loadOrders()
+  }, [restaurantId, loadOrders, initialOrders.length])
+
+  // Realtime: re-busca quando qualquer pedido muda
   useEffect(() => {
     const pb = pbRef.current
     let unsubscribe: (() => void) | null = null
 
     pb.collection('orders').subscribe('*', async event => {
-      if (event.action === 'create') {
-        const order = event.record as any
-        if (order.restaurant_id !== restaurantId) return
-        const rich = await fetchRichOrder(pb, order.id)
-        if (rich) setOrders(prev => [...prev, rich])
+      const order = event.record as any
+      if (order.restaurant_id !== restaurantId) return
+      if (event.action === 'update' && ['closed', 'cancelled'].includes(order.status)) {
+        setOrders(prev => prev.filter(o => o.id !== order.id))
+        return
       }
-      if (event.action === 'update') {
-        const updated = event.record as unknown as Order
-        if (['closed', 'cancelled'].includes(updated.status)) {
-          setOrders(prev => prev.filter(o => o.id !== updated.id))
-        } else {
-          setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
-        }
-      }
+      // Para criação ou atualização de status, re-busca tudo para ter items enriquecidos
+      await loadOrders()
     }, { filter: `restaurant_id = "${restaurantId}"` })
       .then(unsub => { unsubscribe = unsub })
       .catch(() => {})
 
     return () => { unsubscribe?.() }
-  }, [restaurantId])
+  }, [restaurantId, loadOrders])
 
   async function updateStatus(orderId: string, status: OrderStatus) {
     try {

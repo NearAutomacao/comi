@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/pb/server'
+import { createAdminClient, inFilter } from '@/lib/pb/server'
 import { NextResponse } from 'next/server'
 
 // POST /api/orders/items — adiciona itens a um pedido existente
@@ -33,25 +33,26 @@ async function handlePost(req: Request) {
 
   const restId = restaurantId || order.restaurant_id
 
-  // Busca dados do cardápio para roteamento de impressora
-  const menuItemsData: any[] = []
-  for (const item of items) {
-    try {
-      const mi = await pb.collection('menu_items').getOne(item.menuItemId)
-      let cat: any = null
-      if (mi.category_id) {
-        try { cat = await pb.collection('menu_categories').getOne(mi.category_id) } catch {}
-      }
-      menuItemsData.push({ ...mi, category: cat })
-    } catch {}
+  // Batch: busca todos menu_items e categorias de uma vez
+  const menuItemIds = [...new Set(items.map(i => i.menuItemId))]
+  const { items: menuItemsRaw } = await pb.collection('menu_items').getList(1, 200, {
+    filter: inFilter('id', menuItemIds),
+  })
+  const categoryIds = [...new Set(menuItemsRaw.map((m: any) => m.category_id).filter(Boolean))] as string[]
+  let catMap: Record<string, any> = {}
+  if (categoryIds.length > 0) {
+    const { items: cats } = await pb.collection('menu_categories').getList(1, 100, {
+      filter: inFilter('id', categoryIds),
+    })
+    catMap = Object.fromEntries(cats.map((c: any) => [c.id, c]))
   }
+  const menuItemsData = menuItemsRaw.map((mi: any) => ({ ...mi, category: catMap[mi.category_id] ?? null }))
 
-  // Insere os novos itens
+  // Insere os novos itens em paralelo
   let addedTotal = 0
-  for (const item of items) {
-    const subtotal = item.quantity * item.unitPrice
-    addedTotal += subtotal
-    await pb.collection('order_items').create({
+  for (const item of items) addedTotal += item.quantity * item.unitPrice
+  await Promise.all(items.map(item =>
+    pb.collection('order_items').create({
       restaurant_id: restId,
       order_id: orderId,
       menu_item_id: item.menuItemId,
@@ -59,7 +60,7 @@ async function handlePost(req: Request) {
       unit_price: item.unitPrice,
       notes: null,
     })
-  }
+  ))
 
   // Atualiza total do pedido
   const newTotal = (order.total ?? 0) + addedTotal
