@@ -10,6 +10,7 @@ export interface DeliverySessionPayload {
   guestName: string
   guestPhone: string
   orderId?: string | null
+  paymentId?: string | null
   iat?: number
   exp?: number
 }

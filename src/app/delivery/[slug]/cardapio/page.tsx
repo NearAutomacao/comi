@@ -82,6 +82,7 @@ export default async function DeliveryCardapioPage({
       guestName={session.guestName}
       guestPhone={session.guestPhone}
       grouped={grouped}
+      mpEnabled={!!restaurant.mp_access_token}
     />
   )
 }

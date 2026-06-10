@@ -25,8 +25,9 @@ async function handlePost(req: Request) {
     return NextResponse.json({ error: 'Sessão inválida. Acesse o link novamente.' }, { status: 401 })
   }
 
-  const { items } = await req.json() as {
+  const { items, paymentId } = await req.json() as {
     items: { menuItemId: string; quantity: number; unitPrice: number; notes?: string }[]
+    paymentId?: string | null
   }
 
   if (!items?.length) {
@@ -67,6 +68,9 @@ async function handlePost(req: Request) {
   // Calcula total
   const total = items.reduce((s, i) => s + i.quantity * i.unitPrice, 0)
 
+  // Se paymentId foi enviado, valida que está na sessão (segurança)
+  const confirmedPaymentId = paymentId && paymentId === session.paymentId ? paymentId : null
+
   // Cria o pedido com campos de delivery
   const order = await pb.collection('orders').create({
     restaurant_id: restaurantId,
@@ -76,7 +80,8 @@ async function handlePost(req: Request) {
     status: 'open',
     total,
     code: orderCode,
-    payment_status: 'pending',
+    payment_status: confirmedPaymentId ? 'paid' : 'pending',
+    mp_payment_id: confirmedPaymentId ?? null,
     delivery_name: guestName,
     delivery_phone: guestPhone,
     placed_at: new Date().toISOString(),
