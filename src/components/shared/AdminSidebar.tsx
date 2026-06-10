@@ -45,15 +45,24 @@ const allNav = [
 
 const bottomItems = allNav.slice(0, 4)
 
-export default function AdminSidebar({ managerName, restaurantName, restaurantId }: Props) {
+export default function AdminSidebar({ managerName, restaurantName: initialRestaurantName, restaurantId }: Props) {
   const pathname = usePathname()
   const pbRef = useRef(createClient())
+  const [restaurantName, setRestaurantName] = useState(initialRestaurantName ?? '')
   const [mesasBadge, setMesasBadge] = useState(0)
   const [ordersBadge, setOrdersBadge] = useState(0)
   const [deliveryBadge, setDeliveryBadge] = useState(0)
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
+
+  // Busca nome do restaurante client-side (evita bloquear SSR do layout)
+  useEffect(() => {
+    if (!restaurantId || restaurantName) return
+    pbRef.current.collection('restaurants').getOne(restaurantId, { fields: 'id,name' })
+      .then(r => { if (r.name) setRestaurantName(r.name) })
+      .catch(() => {})
+  }, [restaurantId, restaurantName])
 
   // Ref para evitar closure desatualizado dentro dos callbacks de subscribe
   const pathnameRef = useRef(pathname)

@@ -35,21 +35,45 @@ interface Props {
   initialClosedDates: ClosedDate[]
 }
 
-export default function ConfiguracoesClient({ restaurant, initialHours, initialClosedDates }: Props) {
+export default function ConfiguracoesClient({ restaurant: initialRestaurant, initialHours, initialClosedDates }: Props) {
   const searchParams = useSearchParams()
   const mpStatus = searchParams.get('mp')
   const pbRef = useRef(createClient())
 
-  const [restaurantName, setRestaurantName] = useState(restaurant?.name ?? '')
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(initialRestaurant)
+  const [loading, setLoading] = useState(!initialRestaurant)
+  const [restaurantName, setRestaurantName] = useState(initialRestaurant?.name ?? '')
   const [hours, setHours] = useState(initialHours)
   const [closedDates, setClosedDates] = useState(initialClosedDates)
   const [newDate, setNewDate] = useState('')
   const [newDateReason, setNewDateReason] = useState('')
-  const [whatsappContact, setWhatsappContact] = useState(restaurant?.whatsapp_contact ?? '')
-  const [kitchenHost, setKitchenHost] = useState(restaurant?.printer_kitchen_host ?? '')
-  const [kitchenPort, setKitchenPort] = useState(String(restaurant?.printer_kitchen_port ?? 9100))
-  const [barHost, setBarHost] = useState(restaurant?.printer_bar_host ?? '')
-  const [barPort, setBarPort] = useState(String(restaurant?.printer_bar_port ?? 9100))
+  const [whatsappContact, setWhatsappContact] = useState(initialRestaurant?.whatsapp_contact ?? '')
+  const [kitchenHost, setKitchenHost] = useState(initialRestaurant?.printer_kitchen_host ?? '')
+  const [kitchenPort, setKitchenPort] = useState(String(initialRestaurant?.printer_kitchen_port ?? 9100))
+  const [barHost, setBarHost] = useState(initialRestaurant?.printer_bar_host ?? '')
+  const [barPort, setBarPort] = useState(String(initialRestaurant?.printer_bar_port ?? 9100))
+
+  // Carrega dados client-side (evita bloquear SSR)
+  useEffect(() => {
+    if (initialRestaurant) return
+    fetch('/api/configuracoes')
+      .then(r => r.json())
+      .then(data => {
+        if (data.restaurant) {
+          setRestaurant(data.restaurant)
+          setRestaurantName(data.restaurant.name ?? '')
+          setWhatsappContact(data.restaurant.whatsapp_contact ?? '')
+          setKitchenHost(data.restaurant.printer_kitchen_host ?? '')
+          setKitchenPort(String(data.restaurant.printer_kitchen_port ?? 9100))
+          setBarHost(data.restaurant.printer_bar_host ?? '')
+          setBarPort(String(data.restaurant.printer_bar_port ?? 9100))
+        }
+        if (data.workingHours?.length) setHours(data.workingHours)
+        if (data.closedDates) setClosedDates(data.closedDates)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [initialRestaurant])
 
   const mpConnected = !!restaurant?.mp_access_token
 
@@ -110,6 +134,15 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
     })
     toast.success('MercadoPago desconectado')
     window.location.reload()
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mr-3" />
+        <span className="text-sm">Carregando configurações...</span>
+      </div>
+    )
   }
 
   return (
