@@ -85,7 +85,7 @@ export default async function PedidosPage() {
                     <Badge className={s.class} variant="outline">{s.label}</Badge>
                   </div>
                   <p className="text-xs text-gray-400">
-                    {format(new Date(order.created), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    {order.created ? format(new Date(order.created), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : ''}
                   </p>
                 </CardHeader>
                 <CardContent>

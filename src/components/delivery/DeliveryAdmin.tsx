@@ -238,7 +238,7 @@ export default function DeliveryAdmin({ restaurantId, slug: initialSlug, initial
                           <p className="font-semibold text-gray-800 text-sm">{order.delivery_name}</p>
                         </div>
                         <span className="text-xs text-gray-400 shrink-0">
-                          {format(new Date(order.created), 'HH:mm', { locale: ptBR })}
+                          {order.created ? format(new Date(order.created), 'HH:mm', { locale: ptBR }) : ''}
                         </span>
                       </div>
 

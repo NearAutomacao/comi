@@ -145,7 +145,7 @@ export default function PedidosAdmin({ initialOrders, restaurantId }: { initialO
       .sort((a, b) => a.tableNum - b.tableNum)
       .map(g => ({
         ...g,
-        orders: g.orders.sort((a, b) => new Date(a.created).getTime() - new Date(b.created).getTime()),
+        orders: g.orders.sort((a, b) => new Date(a.created ?? 0).getTime() - new Date(b.created ?? 0).getTime()),
         total: g.orders.reduce((s, o) => s + (o.total ?? 0), 0),
         worstStatus: g.orders.reduce<OrderStatus>((worst, o) =>
           statusPriority[o.status] < statusPriority[worst] ? o.status : worst,
@@ -213,7 +213,7 @@ export default function PedidosAdmin({ initialOrders, restaurantId }: { initialO
                             </span>
                           )}
                           <span className="text-gray-400">
-                            {format(new Date(order.created), 'HH:mm', { locale: ptBR })}
+                            {order.created ? format(new Date(order.created), 'HH:mm', { locale: ptBR }) : ''}
                           </span>
                         </div>
                         <Badge className={`${s.class} text-xs`} variant="outline">{s.label}</Badge>

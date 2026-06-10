@@ -13,7 +13,7 @@ export default async function AdminDeliveryPage() {
     <div className="p-4 md:p-6 mt-14 md:mt-0">
       <DeliveryAdmin
         restaurantId={session.restaurantId ?? ''}
-        restaurantSlug=""
+        slug=""
         initialOrders={[]}
       />
     </div>
