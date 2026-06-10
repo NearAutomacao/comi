@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/pb/client'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,22 @@ import { getDayName } from '@/lib/utils'
 import { toast } from 'sonner'
 import { CreditCard, Clock, CalendarX, Settings, CheckCircle, AlertCircle, ExternalLink, Printer, MessageCircle } from 'lucide-react'
 import type { WorkingHours, ClosedDate, Restaurant } from '@/types'
+
+// Input de hora com estado local — salva só no onBlur para permitir digitação livre
+function TimeInput({ value, disabled, onSave }: { value: string; disabled: boolean; onSave: (v: string) => void }) {
+  const [local, setLocal] = useState(value)
+  useEffect(() => { setLocal(value) }, [value])
+  return (
+    <Input
+      type="time"
+      value={local}
+      disabled={disabled}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={() => { if (local !== value) onSave(local) }}
+      className="w-28 text-sm"
+    />
+  )
+}
 
 interface Props {
   restaurant: Restaurant | null
@@ -210,11 +226,9 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
             <div key={h.id} className="flex items-center gap-3 flex-wrap">
               <Switch checked={h.is_open} onCheckedChange={v => updateHours(h, 'is_open', v)} />
               <span className="w-20 text-sm font-medium">{getDayName(h.day_of_week)}</span>
-              <Input type="time" value={h.open_time ?? ''} disabled={!h.is_open}
-                onChange={e => updateHours(h, 'open_time', e.target.value)} className="w-28 text-sm" />
+              <TimeInput value={h.open_time ?? ''} disabled={!h.is_open} onSave={v => updateHours(h, 'open_time', v)} />
               <span className="text-gray-400 text-sm">às</span>
-              <Input type="time" value={h.close_time ?? ''} disabled={!h.is_open}
-                onChange={e => updateHours(h, 'close_time', e.target.value)} className="w-28 text-sm" />
+              <TimeInput value={h.close_time ?? ''} disabled={!h.is_open} onSave={v => updateHours(h, 'close_time', v)} />
             </div>
           ))}
         </CardContent>
