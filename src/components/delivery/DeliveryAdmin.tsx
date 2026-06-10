@@ -52,6 +52,7 @@ interface Props {
 
 export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrders }: Props) {
   const [orders, setOrders] = useState<DeliveryOrder[]>(initialOrders)
+  const [loading, setLoading] = useState(initialOrders.length === 0)
   const [copied, setCopied] = useState(false)
   const pbRef = useRef(createClient())
 
@@ -92,6 +93,15 @@ export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrd
       toast.error('Erro de conexão')
     }
   }
+
+  // Carga inicial: busca pedidos existentes se initialOrders estava vazio
+  useEffect(() => {
+    if (!restaurantId || initialOrders.length > 0) return
+    fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
+      .then(r => r.json())
+      .then(data => { setOrders(data.orders ?? []); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [restaurantId])
 
   // Realtime: escuta novos pedidos de delivery
   useEffect(() => {
@@ -273,7 +283,13 @@ export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrd
         })}
       </div>
 
-      {orders.length === 0 && (
+      {loading && (
+        <div className="text-center py-16 text-gray-400 mt-4">
+          <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm">Carregando pedidos...</p>
+        </div>
+      )}
+      {!loading && orders.length === 0 && (
         <div className="text-center py-16 text-gray-400 mt-4">
           <PackageCheck size={48} className="mx-auto mb-3 text-gray-200" />
           <p className="font-medium">Nenhum pedido de delivery ainda</p>

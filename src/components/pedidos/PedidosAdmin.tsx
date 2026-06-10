@@ -66,8 +66,27 @@ async function fetchRichOrder(pb: ReturnType<typeof createClient>, orderId: stri
 
 export default function PedidosAdmin({ initialOrders, restaurantId }: { initialOrders: Order[]; restaurantId: string }) {
   const [orders, setOrders] = useState<RichOrder[]>(initialOrders as RichOrder[])
+  const [loading, setLoading] = useState(initialOrders.length === 0)
   const [payingTableId, setPayingTableId] = useState<string | null>(null)
   const pbRef = useRef(createClient())
+
+  // Carga inicial se o servidor não retornou dados
+  useEffect(() => {
+    if (!restaurantId || initialOrders.length > 0) return
+    const pb = pbRef.current
+    const loadOrders = async () => {
+      try {
+        const { items } = await pb.collection('orders').getList(1, 200, {
+          filter: `restaurant_id = "${restaurantId}" && delivery_name = null && (status = "open" || status = "preparing" || status = "served")`,
+          sort: '-code',
+        })
+        const rich = await Promise.all(items.map(o => fetchRichOrder(pb, o.id)))
+        setOrders(rich.filter(Boolean) as RichOrder[])
+      } catch {}
+      setLoading(false)
+    }
+    loadOrders()
+  }, [restaurantId])
 
   useEffect(() => {
     const pb = pbRef.current
@@ -136,6 +155,15 @@ export default function PedidosAdmin({ initialOrders, restaurantId }: { initialO
   }, [orders])
 
   const payingGroup = payingTableId ? groups.find(g => g.tableId === payingTableId) : null
+
+  if (loading) {
+    return (
+      <div className="text-center py-20 text-gray-400">
+        <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm">Carregando pedidos...</p>
+      </div>
+    )
+  }
 
   if (orders.length === 0) {
     return (
