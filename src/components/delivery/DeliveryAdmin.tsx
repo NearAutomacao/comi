@@ -46,19 +46,20 @@ const ACTION_LABEL: Record<OrderStatus, string> = {
 
 interface Props {
   restaurantId: string
-  restaurantSlug: string
+  slug: string
   initialOrders: DeliveryOrder[]
 }
 
-export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrders }: Props) {
+export default function DeliveryAdmin({ restaurantId, slug: initialSlug, initialOrders }: Props) {
   const [orders, setOrders] = useState<DeliveryOrder[]>(initialOrders)
   const [loading, setLoading] = useState(initialOrders.length === 0)
+  const [slug, setSlug] = useState(initialSlug)
   const [copied, setCopied] = useState(false)
   const pbRef = useRef(createClient())
 
-  const deliveryUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/delivery/${restaurantSlug}`
-    : `/delivery/${restaurantSlug}`
+  const deliveryUrl = typeof window !== 'undefined' && slug
+    ? `${window.location.origin}/delivery/${slug}`
+    : ''
 
   function copyLink() {
     navigator.clipboard.writeText(deliveryUrl).then(() => {
@@ -94,9 +95,20 @@ export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrd
     }
   }
 
-  // Carga inicial: busca pedidos existentes se initialOrders estava vazio
+  // Carga inicial: busca slug + pedidos via cliente
   useEffect(() => {
-    if (!restaurantId || initialOrders.length > 0) return
+    if (!restaurantId) { setLoading(false); return }
+
+    // Busca slug do restaurante se ainda não veio do servidor
+    if (!slug) {
+      const pb = pbRef.current
+      pb.collection('restaurants').getOne(restaurantId)
+        .then(r => setSlug((r as any).slug ?? ''))
+        .catch(() => {})
+    }
+
+    // Busca pedidos existentes
+    if (initialOrders.length > 0) { setLoading(false); return }
     fetch(`/api/delivery/orders?restaurantId=${restaurantId}`)
       .then(r => r.json())
       .then(data => { setOrders(data.orders ?? []); setLoading(false) })
@@ -173,9 +185,9 @@ export default function DeliveryAdmin({ restaurantId, restaurantSlug, initialOrd
         <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Seu link de delivery</p>
         <div className="flex items-center gap-2 flex-wrap">
           <code className="flex-1 text-sm bg-gray-50 border rounded-lg px-3 py-2 text-gray-700 min-w-0 truncate">
-            {restaurantSlug ? deliveryUrl : 'Configure o slug do restaurante em Configurações'}
+            {slug ? deliveryUrl : 'Configure o slug do restaurante em Configurações'}
           </code>
-          {restaurantSlug && (
+          {slug && (
             <>
               <Button size="sm" variant="outline" onClick={copyLink} className="shrink-0 gap-1.5">
                 {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
