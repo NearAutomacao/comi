@@ -18,7 +18,7 @@ export default async function PedidosAdminPage() {
     try {
       const { items } = await pb.collection('orders').getList(1, 200, {
         filter: `restaurant_id = "${restaurantId}" && (status = "open" || status = "preparing" || status = "served")`,
-        sort: 'created',
+        sort: 'code',
       })
 
       orders = await Promise.all(

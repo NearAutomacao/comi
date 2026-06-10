@@ -50,6 +50,7 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
   const pbRef = useRef(createClient())
   const [mesasBadge, setMesasBadge] = useState(0)
   const [ordersBadge, setOrdersBadge] = useState(0)
+  const [deliveryBadge, setDeliveryBadge] = useState(0)
   const [updateVersion, setUpdateVersion] = useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
@@ -59,6 +60,7 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
   useEffect(() => {
     if (pathname === '/admin/mesas') setMesasBadge(0)
     if (pathname === '/admin/pedidos') setOrdersBadge(0)
+    if (pathname === '/admin/delivery') setDeliveryBadge(0)
   }, [pathname])
 
   useEffect(() => {
@@ -104,11 +106,20 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
         try { const s = await pb.collection('table_sessions').getOne(order.session_id); guestName = s.guest_name } catch {}
       }
       const code = order.code != null ? `#${String(order.code).padStart(3, '0')}` : ''
-      toast('🍽️ Novo pedido!', {
-        description: [tableNum && `Mesa ${tableNum}`, guestName, code].filter(Boolean).join(' · '),
-        duration: 8000,
-      })
-      if (pathname !== '/admin/pedidos') setOrdersBadge(n => n + 1)
+      const isDelivery = Boolean(order.delivery_name)
+      if (isDelivery) {
+        toast('🛵 Novo pedido delivery!', {
+          description: [order.delivery_name, code].filter(Boolean).join(' · '),
+          duration: 10000,
+        })
+        if (pathname !== '/admin/delivery') setDeliveryBadge(n => n + 1)
+      } else {
+        toast('🍽️ Novo pedido!', {
+          description: [tableNum && `Mesa ${tableNum}`, guestName, code].filter(Boolean).join(' · '),
+          duration: 8000,
+        })
+        if (pathname !== '/admin/pedidos') setOrdersBadge(n => n + 1)
+      }
     }, { filter: `restaurant_id = "${restaurantId}"` })
       .then(unsub => { unsubscribe = unsub })
       .catch(() => {})
@@ -118,6 +129,7 @@ export default function AdminSidebar({ managerName, restaurantName, restaurantId
   function getBadge(href: string) {
     if (href === '/admin/mesas' && pathname !== '/admin/mesas') return mesasBadge
     if (href === '/admin/pedidos' && pathname !== '/admin/pedidos') return ordersBadge
+    if (href === '/admin/delivery' && pathname !== '/admin/delivery') return deliveryBadge
     return 0
   }
 
