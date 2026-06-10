@@ -23,7 +23,7 @@ export async function GET(req: Request) {
 
     // Query 1: pedidos de mesa abertos
     const { items: orders } = await pb.collection('orders').getList(1, 200, {
-      filter: `restaurant_id = "${restaurantId}" && (delivery_name = null || delivery_name = "") && (${inFilter('status', ['open', 'preparing', 'served'])})`,
+      filter: `restaurant_id = "${restaurantId}" && delivery_name = "" && (${inFilter('status', ['open', 'preparing', 'served'])})`,
       sort: '-code',
     })
 

@@ -87,6 +87,7 @@ async function handlePost(req: Request) {
       total: 0,
       code: orderCode,
       payment_status: 'pending',
+      placed_at: new Date().toISOString(),
     })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? 'Erro ao criar pedido' }, { status: 500 })

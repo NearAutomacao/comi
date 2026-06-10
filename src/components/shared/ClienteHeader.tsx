@@ -37,7 +37,18 @@ export default function ClienteHeader({ userName }: Props) {
     async function poll() {
       try {
         if (tableId) {
-          const table = await pb.collection('tables').getOne(tableId, { fields: 'id,status' })
+          let table: any
+          try {
+            table = await pb.collection('tables').getOne(tableId, { fields: 'id,status' })
+          } catch (e: any) {
+            if (e?.status === 404) {
+              clearSession()
+              document.cookie = 'mesa_session=; Max-Age=0; path=/'
+              document.cookie = 'comi_restaurant_id=; Max-Age=0; path=/'
+              return
+            }
+            return
+          }
           if (prevTableStatus && prevTableStatus !== 'empty' && table.status === 'empty') {
             setTimeout(() => {
               const cur = useCartStore.getState().tableId
@@ -51,7 +62,16 @@ export default function ClienteHeader({ userName }: Props) {
         }
 
         if (sessionId) {
-          const session = await pb.collection('table_sessions').getOne(sessionId, { fields: 'id,table_id' })
+          let session: any
+          try {
+            session = await pb.collection('table_sessions').getOne(sessionId, { fields: 'id,table_id' })
+          } catch (e: any) {
+            if (e?.status === 404) {
+              clearSession()
+              document.cookie = 'mesa_session=; Max-Age=0; path=/'
+            }
+            return
+          }
           if (prevSessionTableId && session.table_id && session.table_id !== prevSessionTableId) {
             try {
               const newTable = await pb.collection('tables').getOne(session.table_id, { fields: 'id,number' })

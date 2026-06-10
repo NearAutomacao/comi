@@ -33,7 +33,7 @@ export default async function EstoquePage({
   if (restaurantId) {
     try {
       const { items: orders } = await pb.collection('orders').getList(1, 2000, {
-        filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && created >= "${fromDate} 00:00:00" && created <= "${toDate} 23:59:59"`,
+        filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && placed_at >= "${fromDate}" && placed_at <= "${toDate}T23:59:59"`,
       })
 
       if (orders.length > 0) {

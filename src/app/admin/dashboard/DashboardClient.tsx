@@ -37,7 +37,7 @@ export default function DashboardClient({
     const today = new Date().toISOString().split('T')[0]
     try {
       const { items } = await pb.collection('orders').getList(1, 2000, {
-        filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && created >= "${today} 00:00:00"`,
+        filter: `restaurant_id = "${restaurantId}" && status != "cancelled" && placed_at >= "${today}"`,
       })
       setOrders(items.length)
       setRevenue(items.reduce((s, o: any) => s + Number(o.total ?? 0), 0))
