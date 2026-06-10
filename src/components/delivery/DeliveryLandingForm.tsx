@@ -1,23 +1,90 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, ShoppingBag } from 'lucide-react'
+import { Loader2, MessageCircle, ShoppingBag } from 'lucide-react'
 
 function maskPhone(v: string) {
   return v.replace(/\D/g, '').replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d{1,4})$/, '$1-$2').slice(0, 15)
 }
 
-export default function DeliveryLandingForm({ slug }: { slug: string }) {
+interface WorkingHour {
+  day_of_week: number
+  open_time: string | null
+  close_time: string | null
+  is_open: boolean
+}
+
+interface Props {
+  slug: string
+  restaurantName: string
+  whatsappContact: string | null
+  workingHours: WorkingHour[]
+  closedDates: string[]
+}
+
+function useOpenStatus(workingHours: WorkingHour[], closedDates: string[]) {
+  const [open, setOpen] = useState<boolean | null>(null)
+  const [todayHours, setTodayHours] = useState<WorkingHour | null>(null)
+
+  useEffect(() => {
+    function compute() {
+      const now = new Date()
+      const year = now.getFullYear()
+      const month = String(now.getMonth() + 1).padStart(2, '0')
+      const day = String(now.getDate()).padStart(2, '0')
+      const todayStr = `${year}-${month}-${day}`
+      const dayOfWeek = now.getDay()
+      const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+
+      if (closedDates.includes(todayStr)) {
+        setOpen(false)
+        setTodayHours(null)
+        return
+      }
+
+      const h = workingHours.find(w => w.day_of_week === dayOfWeek) ?? null
+      setTodayHours(h)
+
+      if (!h || !h.is_open || !h.open_time || !h.close_time) {
+        setOpen(false)
+        return
+      }
+
+      setOpen(currentTime >= h.open_time && currentTime <= h.close_time)
+    }
+
+    compute()
+    // Recalcula a cada minuto
+    const interval = setInterval(compute, 60_000)
+    return () => clearInterval(interval)
+  }, [workingHours, closedDates])
+
+  return { open, todayHours }
+}
+
+function formatTime(t: string) {
+  return t.slice(0, 5) // "HH:MM:SS" → "HH:MM"
+}
+
+export default function DeliveryLandingForm({ slug, restaurantName, whatsappContact, workingHours, closedDates }: Props) {
   const router = useRouter()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const { open, todayHours } = useOpenStatus(workingHours, closedDates)
+
+  function whatsappLink() {
+    const digits = (whatsappContact ?? '').replace(/\D/g, '')
+    const number = digits.startsWith('55') ? digits : `55${digits}`
+    return `https://wa.me/${number}`
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -61,9 +128,26 @@ export default function DeliveryLandingForm({ slug }: { slug: string }) {
             <ShoppingBag size={36} className="text-white" />
           </div>
           <h1 className="text-2xl font-black text-gray-800" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            Delivery
+            {restaurantName || 'Delivery'}
           </h1>
-          <p className="text-gray-500 text-sm mt-1">Informe seus dados para ver o cardápio</p>
+
+          {/* Badge aberto/fechado */}
+          {open !== null && (
+            <div className="mt-3 flex flex-col items-center gap-1">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold ${open ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                <span className={`w-2 h-2 rounded-full ${open ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
+                {open ? 'Aberto agora' : 'Fechado agora'}
+              </span>
+              {todayHours?.is_open && todayHours.open_time && todayHours.close_time && (
+                <p className="text-xs text-gray-400">
+                  Hoje: {formatTime(todayHours.open_time)} às {formatTime(todayHours.close_time)}
+                </p>
+              )}
+              {!open && !todayHours?.is_open && (
+                <p className="text-xs text-gray-400">Sem atendimento hoje</p>
+              )}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-sm border p-6 space-y-4">
@@ -108,6 +192,19 @@ export default function DeliveryLandingForm({ slug }: { slug: string }) {
             }
           </Button>
         </form>
+
+        {/* Botão WhatsApp */}
+        {whatsappContact && (
+          <a
+            href={whatsappLink()}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-4 flex items-center justify-center gap-2 w-full bg-green-500 hover:bg-green-600 text-white font-semibold h-11 rounded-xl transition-colors text-sm"
+          >
+            <MessageCircle size={18} />
+            Falar com o restaurante
+          </a>
+        )}
 
         <div className="mt-6 flex justify-center">
           <Image src="/icomi-nobg.png" alt="comi" width={32} height={32} className="opacity-30" />

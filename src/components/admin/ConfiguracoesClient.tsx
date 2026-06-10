@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getDayName } from '@/lib/utils'
 import { toast } from 'sonner'
-import { CreditCard, Clock, CalendarX, Settings, CheckCircle, AlertCircle, ExternalLink, Printer } from 'lucide-react'
+import { CreditCard, Clock, CalendarX, Settings, CheckCircle, AlertCircle, ExternalLink, Printer, MessageCircle } from 'lucide-react'
 import type { WorkingHours, ClosedDate, Restaurant } from '@/types'
 
 interface Props {
@@ -29,6 +29,7 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
   const [closedDates, setClosedDates] = useState(initialClosedDates)
   const [newDate, setNewDate] = useState('')
   const [newDateReason, setNewDateReason] = useState('')
+  const [whatsappContact, setWhatsappContact] = useState(restaurant?.whatsapp_contact ?? '')
   const [kitchenHost, setKitchenHost] = useState(restaurant?.printer_kitchen_host ?? '')
   const [kitchenPort, setKitchenPort] = useState(String(restaurant?.printer_kitchen_port ?? 9100))
   const [barHost, setBarHost] = useState(restaurant?.printer_bar_host ?? '')
@@ -40,6 +41,13 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
     if (!restaurant?.id) return
     await pbRef.current.collection('restaurants').update(restaurant.id, { name: restaurantName })
     toast.success('Nome atualizado')
+  }
+
+  async function saveWhatsapp() {
+    if (!restaurant?.id) return
+    const digits = whatsappContact.replace(/\D/g, '')
+    await pbRef.current.collection('restaurants').update(restaurant.id, { whatsapp_contact: digits || null })
+    toast.success('WhatsApp salvo')
   }
 
   async function updateHours(hour: WorkingHours, field: keyof WorkingHours, value: string | boolean) {
@@ -106,6 +114,30 @@ export default function ConfiguracoesClient({ restaurant, initialHours, initialC
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageCircle size={18} className="text-green-500" /> WhatsApp de contato
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-gray-500">
+            Número exibido no link de delivery para os clientes entrarem em contato.
+          </p>
+          <div className="flex gap-2">
+            <Input
+              placeholder="(11) 99999-0000"
+              value={whatsappContact}
+              onChange={e => setWhatsappContact(e.target.value)}
+            />
+            <Button onClick={saveWhatsapp} className="bg-green-600 hover:bg-green-700 text-white shrink-0">
+              Salvar
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400">Informe apenas os dígitos ou com máscara. Ex: 47999990000</p>
         </CardContent>
       </Card>
 

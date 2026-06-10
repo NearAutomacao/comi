@@ -25,6 +25,7 @@ export interface Restaurant {
   printer_kitchen_port: number | null
   printer_bar_host: string | null
   printer_bar_port: number | null
+  whatsapp_contact: string | null
   created: string
 }
 
